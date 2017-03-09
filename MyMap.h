@@ -104,6 +104,8 @@ public:
     }
     MyMap(MyMap const&) = delete;
     MyMap& operator=(MyMap const&) = delete;
+    MyMap(MyMap&&) = default;
+    MyMap& operator=(MyMap&&) = default;
 };
 
 #endif
