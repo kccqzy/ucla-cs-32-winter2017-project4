@@ -11,8 +11,7 @@ private:
         V value;
         Node *left, *right;
         Color color;
-        Node(K const& key, V const& value, Color color)
-          : key(key), value(value), left{nullptr}, right{nullptr}, color(color) {}
+        Node(K const& key, V const& value) : key(key), value(value), left{nullptr}, right{nullptr}, color(Color::Red) {}
     };
 
     typedef std::deque<Node> Arena;
@@ -62,7 +61,7 @@ private:
 
     Node* insert_node(Node* node, K const& k, V const& v) {
         if (!node) {
-            nodes.emplace_back(k, v, Color::Red);
+            nodes.emplace_back(k, v);
             return &nodes.back();
         }
         if (node->key < k) {
