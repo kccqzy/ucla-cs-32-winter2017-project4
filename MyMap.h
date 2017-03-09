@@ -5,11 +5,11 @@
 template<typename K, typename V>
 class MyMap {
 public:
-    MyMap() : nodes{}, root{-1} {}
+    MyMap() : nodes{}, root{nullptr} {}
     ~MyMap() = default;
     void clear() {
         nodes.clear();
-        root = {-1};
+        root = nullptr;
     }
     int size() const { return nodes.size(); }
 
@@ -17,20 +17,15 @@ public:
     MyMap& operator=(MyMap const&) = delete;
 
 private:
-    struct Ptr {
-        int i;
-        explicit operator bool() const { return i != -1; }
-    };
     enum class Color { Red, Black };
     struct Node {
         K key;
         V value;
-        Ptr left, right;
+        Node *left, *right;
         Color color;
-        Node(K const& key, V const& value, Color color) : key(key), value(value), left{-1}, right{-1}, color(color) {}
+        Node(K const& key, V const& value, Color color)
+          : key(key), value(value), left{nullptr}, right{nullptr}, color(color) {}
     };
-    Node const& deref(Ptr i) const { return nodes[i.i]; }
-    Node& deref(Ptr i) { return nodes[i.i]; }
 
     typedef std::deque<Node> Arena;
     // The only reason we use std::deque is because we want stable references
@@ -39,63 +34,63 @@ private:
     // deque invalidates all the iterators to the deque, but has no effect on
     // the validity of references to elements of the deque.
     Arena nodes;
-    Ptr root;
+    Node* root;
 
-    bool is_red(Ptr p) const {
+    bool is_red(Node* p) const {
         if (!p) return false; // Null links are black
-        return deref(p).color == Color::Red;
+        return p->color == Color::Red;
     }
 
-    Ptr rotate_left(Ptr h) {
-        Ptr x = deref(h).right;
-        deref(h).right = deref(x).left;
-        deref(x).left = h;
-        deref(x).color = deref(h).color;
-        deref(h).color = Color::Red;
+    Node* rotate_left(Node* h) {
+        Node* x = h->right;
+        h->right = x->left;
+        x->left = h;
+        x->color = h->color;
+        h->color = Color::Red;
         return x;
     }
 
-    Ptr rotate_right(Ptr h) {
-        Ptr x = deref(h).left;
-        deref(h).left = deref(x).right;
-        deref(x).right = h;
-        deref(x).color = deref(h).color;
-        deref(h).color = Color::Red;
+    Node* rotate_right(Node* h) {
+        Node* x = h->left;
+        h->left = x->right;
+        x->right = h;
+        x->color = h->color;
+        h->color = Color::Red;
         return x;
     }
 
-    void move_red_up(Ptr h) {
-        deref(h).color = Color::Red;
-        deref(deref(h).left).color = Color::Black;
-        deref(deref(h).right).color = Color::Black;
+    void move_red_up(Node* h) {
+        h->color = Color::Red;
+        h->left->color = Color::Black;
+        h->right->color = Color::Black;
     }
 
-    Ptr find_node(Ptr p, K const& k) const {
+    Node* find_node(Node* p, K const& k) const {
         if (!p) return p;
-        if (deref(p).key < k) return find_node(deref(p).right, k);
-        if (deref(p).key > k) return find_node(deref(p).left, k);
+        if (p->key < k) return find_node(p->right, k);
+        if (p->key > k) return find_node(p->left, k);
         return p;
     }
 
-    Ptr insert_node(Ptr node, K const& k, V const& v) {
+    Node* insert_node(Node* node, K const& k, V const& v) {
         if (!node) {
             nodes.emplace_back(k, v, Color::Red);
-            return {static_cast<int>(nodes.size() - 1)};
+            return &nodes.back();
         }
-        if (deref(node).key < k) {
-            auto new_right = insert_node(deref(node).right, k, v);
-            deref(node).right = new_right;
-        } else if (deref(node).key > k) {
-            auto new_left = insert_node(deref(node).left, k, v);
-            deref(node).left = new_left;
+        if (node->key < k) {
+            auto new_right = insert_node(node->right, k, v);
+            node->right = new_right;
+        } else if (node->key > k) {
+            auto new_left = insert_node(node->left, k, v);
+            node->left = new_left;
         } else {
-            deref(node).key = k;
-            deref(node).value = v;
+            node->key = k;
+            node->value = v;
         }
 
-        if (is_red(deref(node).right) && !is_red(deref(node).left)) node = rotate_left(node);
-        if (is_red(deref(node).left) && is_red(deref(deref(node).left).left)) node = rotate_right(node);
-        if (is_red(deref(node).left) && is_red(deref(node).right)) move_red_up(node);
+        if (is_red(node->right) && !is_red(node->left)) node = rotate_left(node);
+        if (is_red(node->left) && is_red(node->left->left)) node = rotate_right(node);
+        if (is_red(node->left) && is_red(node->right)) move_red_up(node);
 
         return node;
     }
@@ -103,14 +98,14 @@ private:
 public:
     void associate(const K& key, const V& value) {
         root = insert_node(root, key, value);
-        deref(root).color = Color::Black;
+        root->color = Color::Black;
     }
     V const* find(K const& key) const {
-        if (Ptr p = find_node(root, key)) return &deref(p).value;
+        if (Node* p = find_node(root, key)) return &p->value;
         return nullptr;
     }
     V* find(K const& key) {
-        if (Ptr p = find_node(root, key)) return &deref(p).value;
+        if (Node* p = find_node(root, key)) return &p->value;
         return nullptr;
     }
 };
