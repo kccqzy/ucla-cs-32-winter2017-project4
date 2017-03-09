@@ -4,18 +4,6 @@
 
 template<typename K, typename V>
 class MyMap {
-public:
-    MyMap() : nodes{}, root{nullptr} {}
-    ~MyMap() = default;
-    void clear() {
-        nodes.clear();
-        root = nullptr;
-    }
-    int size() const { return nodes.size(); }
-
-    MyMap(MyMap const&) = delete;
-    MyMap& operator=(MyMap const&) = delete;
-
 private:
     enum class Color { Red, Black };
     struct Node {
@@ -96,6 +84,13 @@ private:
     }
 
 public:
+    MyMap() : nodes{}, root{nullptr} {}
+    ~MyMap() = default;
+    void clear() {
+        nodes.clear();
+        root = nullptr;
+    }
+    int size() const { return nodes.size(); }
     void associate(const K& key, const V& value) {
         root = insert_node(root, key, value);
         root->color = Color::Black;
@@ -108,6 +103,8 @@ public:
         if (Node* p = find_node(root, key)) return &p->value;
         return nullptr;
     }
+    MyMap(MyMap const&) = delete;
+    MyMap& operator=(MyMap const&) = delete;
 };
 
 #endif
