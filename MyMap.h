@@ -1,5 +1,3 @@
-// MyMap.h
-
 #ifndef MYMAP_H
 #define MYMAP_H
 #include <deque>
@@ -34,7 +32,13 @@ private:
     Node const& deref(Ptr i) const { return nodes[i.i]; }
     Node& deref(Ptr i) { return nodes[i.i]; }
 
-    std::deque<Node> nodes;
+    typedef std::deque<Node> Arena;
+    // The only reason we use std::deque is because we want stable references
+    // yet clustering behavior for cache locality. For stability of references,
+    // see C++11 [deque.modifiers] 23.3.3.4/1: An insertion at either end of the
+    // deque invalidates all the iterators to the deque, but has no effect on
+    // the validity of references to elements of the deque.
+    Arena nodes;
     Ptr root;
 
     bool is_red(Ptr p) const {
@@ -67,13 +71,10 @@ private:
     }
 
     Ptr find_node(Ptr p, K const& k) const {
-        if (!p) return {-1};
-        if (deref(p).key < k)
-            return find_node(deref(p).right, k);
-        else if (deref(p).key > k)
-            return find_node(deref(p).left, k);
-        else
-            return p;
+        if (!p) return p;
+        if (deref(p).key < k) return find_node(deref(p).right, k);
+        if (deref(p).key > k) return find_node(deref(p).left, k);
+        return p;
     }
 
     Ptr insert_node(Ptr node, K const& k, V const& v) {
