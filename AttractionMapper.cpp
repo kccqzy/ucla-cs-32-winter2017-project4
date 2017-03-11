@@ -1,54 +1,49 @@
+#include "MyMap.h"
 #include "provided.h"
+#include <cassert>
+#include <cctype>
 #include <string>
-using namespace std;
 
-class AttractionMapperImpl
-{
+class AttractionMapperImpl {
+private:
+    MyMap<std::string, GeoCoord> m_map;
+
 public:
-	AttractionMapperImpl();
-	~AttractionMapperImpl();
-	void init(const MapLoader& ml);
-	bool getGeoCoord(string attraction, GeoCoord& gc) const;
+    void init(const MapLoader& ml) {
+        m_map.clear();
+        for (size_t i = 0, ie = ml.getNumSegments(); i < ie; ++i) {
+            // Don't hide data. MapLoader should have been a simple function
+            // that returns a vector. Then we can use range-for loops here
+            // because vector provides it.
+            StreetSegment seg;
+            if (!ml.getSegment(i, seg)) assert(false && "cannot get valid segment index");
+            for (auto const& attr : seg.attractions) {
+                auto name = attr.name;
+                for (auto& c : name) c = std::tolower(c);
+                m_map.associate(name, attr.geocoordinates);
+            }
+        }
+    }
+    bool getGeoCoord(std::string name, GeoCoord& gc) const {
+        for (auto& c : name) c = std::tolower(c);
+        if (auto const* c = m_map.find(name)) {
+            gc = *c;
+            return true;
+        }
+        return false;
+    }
 };
-
-AttractionMapperImpl::AttractionMapperImpl()
-{
-}
-
-AttractionMapperImpl::~AttractionMapperImpl()
-{
-}
-
-void AttractionMapperImpl::init(const MapLoader& ml)
-{
-}
-
-bool AttractionMapperImpl::getGeoCoord(string attraction, GeoCoord& gc) const
-{
-	return false;  // This compiles, but may not be correct
-}
 
 //******************** AttractionMapper functions *****************************
 
 // These functions simply delegate to AttractionMapperImpl's functions.
-// You probably don't want to change any of this code.
 
-AttractionMapper::AttractionMapper()
-{
-	m_impl = new AttractionMapperImpl;
-}
+AttractionMapper::AttractionMapper() { m_impl = new AttractionMapperImpl; }
 
-AttractionMapper::~AttractionMapper()
-{
-	delete m_impl;
-}
+AttractionMapper::~AttractionMapper() { delete m_impl; }
 
-void AttractionMapper::init(const MapLoader& ml)
-{
-	m_impl->init(ml);
-}
+void AttractionMapper::init(const MapLoader& ml) { m_impl->init(ml); }
 
-bool AttractionMapper::getGeoCoord(string attraction, GeoCoord& gc) const
-{
-	return m_impl->getGeoCoord(attraction, gc);
+bool AttractionMapper::getGeoCoord(std::string attraction, GeoCoord& gc) const {
+    return m_impl->getGeoCoord(attraction, gc);
 }
