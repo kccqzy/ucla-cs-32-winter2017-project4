@@ -6,10 +6,10 @@
 
 class SegmentMapperImpl {
 private:
-    MyMap<std::pair<double, double>, std::vector<StreetSegment>> m_map;
-    // This could have stored pointers to StreetSegment; if only we knew
-    // MapLoader would outlive the SegmentMapper!
-    void insertInto(GeoCoord const& gc, StreetSegment const& sg) {
+    std::vector<StreetSegment> m_segments;
+    MyMap<std::pair<double, double>, std::vector<StreetSegment const*>> m_map;
+
+    void insertInto(GeoCoord const& gc, StreetSegment const* sg) {
         auto key = std::make_pair(gc.latitude, gc.longitude);
         if (auto* segs = m_map.find(key))
             segs->push_back(sg);
@@ -20,17 +20,23 @@ private:
 public:
     void init(const MapLoader& ml) {
         m_map.clear();
+        m_segments.clear();
+        m_segments.reserve(ml.getNumSegments());
         for (size_t i = 0, ie = ml.getNumSegments(); i < ie; ++i) {
             StreetSegment seg;
             if (!ml.getSegment(i, seg)) assert(false && "cannot get valid segment index");
-            insertInto(seg.segment.start, seg);
-            insertInto(seg.segment.end, seg);
-            for (auto const& attr : seg.attractions) insertInto(attr.geocoordinates, seg);
+            m_segments.emplace_back(std::move(seg));
+        }
+        for (auto const& seg : m_segments) {
+            insertInto(seg.segment.start, &seg);
+            insertInto(seg.segment.end, &seg);
+            for (auto const& attr : seg.attractions) insertInto(attr.geocoordinates, &seg);
         }
     }
     auto getSegments(const GeoCoord& gc) const {
         std::vector<StreetSegment> segments;
-        if (auto const* segs = m_map.find(std::make_pair(gc.latitude, gc.longitude))) segments = *segs;
+        if (auto const* segs = m_map.find(std::make_pair(gc.latitude, gc.longitude)))
+            for (auto const* seg : *segs) segments.emplace_back(*seg);
         return segments;
     }
 };
