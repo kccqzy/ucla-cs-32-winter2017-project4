@@ -1,16 +1,28 @@
 #include "MyMap.h"
 #include "provided.h"
 #include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <type_traits>
 #include <utility>
 #include <vector>
+
+namespace {
+template<typename R, typename T, typename = typename std::enable_if<sizeof(R) == sizeof(T)>::type>
+R reinterpret(T t) {
+    R r;
+    memcpy(&r, &t, sizeof(R));
+    return r;
+}
+}
 
 class SegmentMapperImpl {
 private:
     std::vector<StreetSegment> m_segments;
-    MyMap<std::pair<double, double>, std::vector<StreetSegment const*>> m_map;
+    MyMap<std::pair<int64_t, int64_t>, std::vector<StreetSegment const*>> m_map;
 
     void insertInto(GeoCoord const& gc, StreetSegment const* sg) {
-        auto key = std::make_pair(gc.latitude, gc.longitude);
+        auto key = std::make_pair(reinterpret<int64_t>(gc.latitude), reinterpret<int64_t>(gc.longitude));
         if (auto* segs = m_map.find(key))
             segs->push_back(sg);
         else
@@ -35,7 +47,7 @@ public:
     }
     auto getSegments(const GeoCoord& gc) const {
         std::vector<StreetSegment> segments;
-        if (auto const* segs = m_map.find(std::make_pair(gc.latitude, gc.longitude)))
+        if (auto const* segs = m_map.find(std::make_pair(reinterpret<int64_t>(gc.latitude), reinterpret<int64_t>(gc.longitude))))
             for (auto const* seg : *segs) segments.emplace_back(*seg);
         return segments;
     }
