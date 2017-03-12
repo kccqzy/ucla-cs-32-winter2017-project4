@@ -55,7 +55,7 @@ private:
     Node* find_node(Node* p, K const& k) const {
         if (!p) return p;
         if (p->key < k) return find_node(p->right, k);
-        if (p->key > k) return find_node(p->left, k);
+        if (k < p->key) return find_node(p->left, k);
         return p;
     }
 
@@ -67,7 +67,7 @@ private:
         if (node->key < k) {
             auto new_right = insert_node(node->right, k, v);
             node->right = new_right;
-        } else if (node->key > k) {
+        } else if (k < node->key) {
             auto new_left = insert_node(node->left, k, v);
             node->left = new_left;
         } else {
