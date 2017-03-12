@@ -24,29 +24,27 @@ public:
 
         try {
             while (1) {
-                fs.exceptions(std::ifstream::badbit | std::ifstream::failbit);
                 std::string streetName, begLat, begLon, endLat, endLon, attractionsCountStr;
                 if (!std::getline(fs, streetName)) break;
-                fs.exceptions(std::ifstream::badbit | std::ifstream::failbit | std::ifstream::eofbit);
-                std::getline(fs, begLat, ',');
-                std::getline(fs, begLon, ' ');
-                std::getline(fs, endLat, ',');
-                std::getline(fs, endLon);
-                std::getline(fs, attractionsCountStr);
+                if (!std::getline(fs, begLat, ',')) return false;
+                if (!std::getline(fs >> std::ws, begLon, ' ')) return false;
+                if (!std::getline(fs, endLat, ',')) return false;
+                if (!std::getline(fs >> std::ws, endLon)) return false;
+                if (!std::getline(fs, attractionsCountStr)) return false;
                 size_t attractionsCount = std::stoll(attractionsCountStr);
                 std::vector<Attraction> attractions;
-                while (attractionsCount--) {
+                for (size_t j = 0; j < attractionsCount; ++j) {
                     std::string attrName, attrLat, attrLon;
-                    std::getline(fs, attrName, '|');
-                    std::getline(fs, attrLat, ',');
-                    std::getline(fs, attrLon);
+                    if (!std::getline(fs, attrName, '|')) return false;
+                    if (!std::getline(fs, attrLat, ',')) return false;
+                    if (!std::getline(fs >> std::ws, attrLon)) return false;
                     attractions.push_back({std::move(attrName), {std::move(attrLat), std::move(attrLon)}});
                 }
                 segments.push_back({std::move(streetName),
                                     {{std::move(begLat), std::move(begLon)}, {std::move(endLat), std::move(endLon)}},
                                     std::move(attractions)});
             }
-        } catch (...) { return false; }
+        } catch (std::exception&) { return false; }
         m_segments.clear();
         std::swap(segments, m_segments);
         return true;
