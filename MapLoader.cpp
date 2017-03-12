@@ -45,7 +45,6 @@ public:
                                     std::move(attractions)});
             }
         } catch (std::exception&) { return false; }
-        m_segments.clear();
         std::swap(segments, m_segments);
         return true;
     }
