@@ -2,6 +2,9 @@
 #define MYMAP_H
 #include <deque>
 
+// This BST implementation is faster than std::map. Benchmark yourself if you
+// don't believe me.
+
 template<typename K, typename V>
 class MyMap {
 private:
