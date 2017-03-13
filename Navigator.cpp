@@ -151,7 +151,6 @@ public:
         assert(startStreetSegments.size() == 1);
         auto startStreetSegment = startStreetSegments.front();
 
-        std::map<GeoCoord, GeoCoord> evaluatedNodes;
         std::map<GeoCoord, DiscoveredNode> discoveredNodes;
 
         {
@@ -185,13 +184,8 @@ public:
                     path.emplace_back(here);
                     if (isGeoCoordOnSegment(here, startStreetSegment)) break;
                     auto i = discoveredNodes.find(here);
-                    auto j = evaluatedNodes.find(here);
-                    if (i != discoveredNodes.end())
-                        here = i->second.parent;
-                    else if (j != evaluatedNodes.end())
-                        here = j->second;
-                    else
-                        assert(false && "cannot find parent node");
+                    assert(i != discoveredNodes.end());
+                    here = i->second.parent;
                 }
                 path.emplace_back(startCoord);
                 std::reverse(path.begin(), path.end());
@@ -200,23 +194,14 @@ public:
             }
 
             currentIt->second.optimisticEstimate = HUGE_VAL;
-            evaluatedNodes.emplace(currentIt->first, currentIt->second.parent);
             for (auto const& neighbor : getNeighbors(currentIt->first)) {
-                if (evaluatedNodes.find(neighbor) != evaluatedNodes.end()) {
-                    fprintf(stderr, "Skipping coord {%s,%s} because it has already been evaluated.\n",
-                            neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
-                    continue;
-                }
-                fprintf(stderr, "Investigating GeoGraphics[{Red,Thick,GeoPath[{{%s,%s},{%s,%s}}]}]\n",
-                        currentIt->first.latitudeText.c_str(), currentIt->first.longitudeText.c_str(),
-                        neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
                 double distance = currentIt->second.travelledDistance + distanceEarthKM(currentIt->first, neighbor);
                 assert(distance > 0);
                 auto it = discoveredNodes.find(neighbor);
                 if (it == discoveredNodes.end())
                     discoveredNodes.emplace(neighbor, DiscoveredNode(currentIt->first, distance,
                                                                      distance + distanceEarthKM(neighbor, endCoord)));
-                else if (distance >= it->second.travelledDistance)
+                else if (it->second.optimisticEstimate == HUGE_VAL || distance >= it->second.travelledDistance)
                     continue;
                 else
                     it->second =
