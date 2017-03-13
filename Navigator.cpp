@@ -173,7 +173,7 @@ public:
               std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
                   return a.second.optimisticEstimate < b.second.optimisticEstimate;
               });
-            if (currentIt->second.optimisticEstimate == HUGE_VAL) break;
+            if (currentIt->second.optimisticEstimate == HUGE_VAL) return NAV_NO_ROUTE;
             fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", currentIt->first.latitudeText.c_str(),
                     currentIt->first.longitudeText.c_str());
             if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
@@ -208,7 +208,7 @@ public:
                       DiscoveredNode(currentIt->first, distance, distance + distanceEarthKM(neighbor, endCoord));
             }
         }
-        return NAV_NO_ROUTE;
+        assert(false && "unreachable");
     }
 };
 
