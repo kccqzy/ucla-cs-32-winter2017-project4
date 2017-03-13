@@ -3,7 +3,6 @@
 #include <cassert>
 #include <deque>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include <map>
@@ -46,9 +45,10 @@ private:
     }
 
     void reconstructPath(std::vector<GeoCoord> const& path, std::vector<NavSegment>&) const {
-        fprintf(stderr, "GeoGraphics[{Red, Thick, GeoPath[{ {%s,%s}", path.front().latitudeText.c_str(), path.back().longitudeText.c_str());
+        fprintf(stderr, "GeoGraphics[{Red, Thick, GeoPath[{ {%s,%s}", path.front().latitudeText.c_str(),
+                path.front().longitudeText.c_str());
         for (auto i = std::next(path.begin()); i != path.end(); ++i)
-        fprintf(stderr, ",{%s,%s}", i->latitudeText.c_str(), i->longitudeText.c_str());
+            fprintf(stderr, ",{%s,%s}", i->latitudeText.c_str(), i->longitudeText.c_str());
         fprintf(stderr, "}]}]\n");
     }
 
@@ -66,6 +66,7 @@ public:
     NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) const {
         GeoCoord startCoord;
         if (!attractionMapper.getGeoCoord(start, startCoord)) return NAV_BAD_SOURCE;
+        fprintf(stderr, "Found attraction %s at {%s,%s}\n", start.c_str(), startCoord.latitudeText.c_str(), startCoord.longitudeText.c_str());
         GeoCoord endCoord;
         if (!attractionMapper.getGeoCoord(end, endCoord)) return NAV_BAD_DESTINATION;
 
@@ -78,30 +79,32 @@ public:
         auto startStreetSegment = startStreetSegments.front();
 
         std::map<GeoCoord, GeoCoord> evaluatedNodes;
-        std::map<GeoCoord, std::tuple<GeoCoord, double, double>> discoveredNodes;
+        std::map<GeoCoord, DiscoveredNode> discoveredNodes;
 
         {
             double travelledToStart = distanceEarthKM(startCoord, startStreetSegment.segment.start);
             discoveredNodes.emplace(
               startStreetSegment.segment.start,
-              std::make_tuple(startStreetSegment.segment.start,
-                              travelledToStart + distanceEarthKM(startStreetSegment.segment.start, endCoord),
-                              travelledToStart));
+              DiscoveredNode(startStreetSegment.segment.start,
+                             travelledToStart + distanceEarthKM(startStreetSegment.segment.start, endCoord),
+                             travelledToStart));
         }
         {
             double travelledToEnd = distanceEarthKM(startCoord, startStreetSegment.segment.end);
             discoveredNodes.emplace(
               startStreetSegment.segment.end,
-              std::make_tuple(startStreetSegment.segment.end,
-                              travelledToEnd + distanceEarthKM(startStreetSegment.segment.end, endCoord),
-                              travelledToEnd));
+              DiscoveredNode(startStreetSegment.segment.end,
+                             travelledToEnd + distanceEarthKM(startStreetSegment.segment.end, endCoord),
+                             travelledToEnd));
         }
 
         while (!discoveredNodes.empty()) {
-            auto current =
-              *std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
-                  return std::get<1>(a.second) < std::get<1>(b.second);
+            auto currentIt =
+              std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
+                  return a.second.travelledDistance < b.second.travelledDistance;
               });
+            auto current = *currentIt;
+            fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", current.first.latitudeText.c_str(), current.first.longitudeText.c_str());
             if (isGeoCoordOnSegment(current.first, endStreetSegment)) {
                 std::vector<GeoCoord> path;
                 path.emplace_back(endCoord);
@@ -112,7 +115,7 @@ public:
                     auto i = discoveredNodes.find(here);
                     auto j = evaluatedNodes.find(here);
                     if (i != discoveredNodes.end())
-                        here = std::get<0>(i->second);
+                        here = i->second.parent;
                     else if (j != evaluatedNodes.end())
                         here = j->second;
                     else
@@ -123,21 +126,30 @@ public:
                 reconstructPath(path, directions);
                 return NAV_SUCCESS;
             }
-            evaluatedNodes.emplace(current.first, std::get<0>(current.second));
-            discoveredNodes.erase(discoveredNodes.begin());
+
+            discoveredNodes.erase(currentIt);
+            evaluatedNodes.emplace(current.first, current.second.parent);
             for (auto const& neighbor : getNeighbors(current.first)) {
-                if (evaluatedNodes.find(neighbor) != evaluatedNodes.end()) continue;
-                double distance = std::get<2>(current.second) + distanceEarthKM(current.first, neighbor);
+                if (evaluatedNodes.find(neighbor) != evaluatedNodes.end()) {
+                    fprintf(stderr, "Skipping coord {%s,%s} because it has already been evaluated.\n",
+                            neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
+                    continue;
+                }
+                fprintf(stderr, "Investigating GeoGraphics[{Red,Thick,GeoPath[{{%s,%s},{%s,%s}}]}]\n",
+                        current.first.latitudeText.c_str(), current.first.longitudeText.c_str(),
+                        neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
+                double distance = current.second.optimisticEstimate + distanceEarthKM(current.first, neighbor);
+                assert(distance > 0);
                 auto it = discoveredNodes.find(neighbor);
                 if (it == discoveredNodes.end())
                     discoveredNodes.emplace(
                       neighbor,
-                      std::make_tuple(current.first, distance + distanceEarthKM(neighbor, endCoord), distance));
-                else if (distance >= std::get<1>(it->second))
+                      DiscoveredNode(current.first, distance + distanceEarthKM(neighbor, endCoord), distance));
+                else if (distance >= it->second.travelledDistance)
                     continue;
                 else
                     it->second =
-                      std::make_tuple(current.first, distance + distanceEarthKM(neighbor, endCoord), distance);
+                      DiscoveredNode(current.first, distance + distanceEarthKM(neighbor, endCoord), distance);
             }
         }
         return NAV_NO_ROUTE;

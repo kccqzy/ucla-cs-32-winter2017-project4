@@ -18,6 +18,9 @@ int main() {
     assert(r);
     testNav(nav, "1061 Broxton Avenue", "Headlines!");
     testNav(nav, "UCLA Opus Project", "UCLA Wilshire Center");
-    testNav(nav, "Covel Commons", "Intramural Field");
-    // testNav(nav, "Brentwood Country Mart", "Saint Sebastian School");
+    testNav(nav, "Intramural Field", "Covel Commons");
+    testNav(nav, "David Geffen School of Medicine", "Covel Commons");
+    testNav(nav, "David Geffen School of Medicine", "Twentieth Century Fox Film Corporation");
+    testNav(nav, "Literati Cafe", "Residence Inn by Marriott Beverly Hills");
+    testNav(nav, "Fresh corn grill ", "Saint Sebastian School");
 }
