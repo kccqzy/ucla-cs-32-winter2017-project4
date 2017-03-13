@@ -8,8 +8,6 @@
 #include <string>
 #include <vector>
 
-#include <map>
-
 bool operator<(GeoCoord const& a, GeoCoord const& b) {
     return std::make_pair(a.latitude, a.longitude) < std::make_pair(b.latitude, b.longitude);
 }
@@ -42,11 +40,12 @@ private:
         DiscoveredNode(GeoCoord const& parent, double travelledDistance, double optimisticEstimate)
           : parent(parent), travelledDistance(travelledDistance), optimisticEstimate(optimisticEstimate) {}
     };
-    typedef std::map<GeoCoord, DiscoveredNode> NodeMap;
+    typedef MyMap<GeoCoord, DiscoveredNode> NodeMap;
     struct RankedNode {
         double rank;
-        NodeMap::iterator it;
-        RankedNode(double rank, NodeMap::iterator it) : rank(rank), it(it) {}
+        DiscoveredNode* it;
+        GeoCoord coord;
+        RankedNode(double rank, DiscoveredNode* it, GeoCoord coord) : rank(rank), it(it), coord(coord) {}
         friend bool operator<(RankedNode const& a, RankedNode const& b) { return a.rank > b.rank; }
     };
     typedef std::priority_queue<RankedNode> NodeRanks;
@@ -68,8 +67,8 @@ private:
             path.emplace_back(here);
             if (isGeoCoordOnSegment(here, startStreetSegment)) break;
             auto i = discoveredNodes.find(here);
-            assert(i != discoveredNodes.end());
-            here = i->second.parent;
+            assert(i);
+            here = i->parent;
         }
         path.emplace_back(startCoord);
         std::reverse(path.begin(), path.end());
@@ -92,8 +91,8 @@ private:
                                    NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
         double distance = distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
-        nodeRanks.emplace(estimate,
-                          discoveredNodes.emplace(routeBegin, DiscoveredNode(routeBegin, distance, estimate)).first);
+        discoveredNodes.associate(routeBegin, DiscoveredNode(routeBegin, distance, estimate));
+        nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
     }
 
 public:
@@ -128,37 +127,36 @@ public:
 
         while (!nodeRanks.empty()) {
             auto currentIt = nodeRanks.top().it;
+            auto currentCoord = nodeRanks.top().coord;
             nodeRanks.pop();
-            if (currentIt->second.optimisticEstimate == HUGE_VAL) {
+            if (currentIt->optimisticEstimate == HUGE_VAL) {
                 // The priority_queue might contain duplicates, and the later
                 // ones might have already been evaluated.
                 continue;
             }
-            if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
-                reconstructPath(startCoord, endCoord, startStreetSegment, currentIt->first, discoveredNodes,
-                                directions);
+            if (isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
+                reconstructPath(startCoord, endCoord, startStreetSegment, currentCoord, discoveredNodes, directions);
                 return NAV_SUCCESS;
             }
 
             // Use this as a marker for completion of evaluation of a node.
-            currentIt->second.optimisticEstimate = HUGE_VAL;
-            for (auto const& neighbor : getNeighbors(currentIt->first)) {
-                double distance = currentIt->second.travelledDistance + distanceEarthKM(currentIt->first, neighbor);
+            currentIt->optimisticEstimate = HUGE_VAL;
+            for (auto const& neighbor : getNeighbors(currentCoord)) {
+                double distance = currentIt->travelledDistance + distanceEarthKM(currentCoord, neighbor);
                 assert(distance > 0);
                 double estimate = distance + distanceEarthKM(neighbor, endCoord);
                 assert(estimate > 0);
                 auto it = discoveredNodes.find(neighbor);
-                if (it == discoveredNodes.end()) {
-                    nodeRanks.emplace(
-                      estimate,
-                      discoveredNodes.emplace(neighbor, DiscoveredNode(currentIt->first, distance, estimate)).first);
-                } else if (it->second.optimisticEstimate == HUGE_VAL || distance >= it->second.travelledDistance) {
+                if (!it) {
+                    discoveredNodes.associate(neighbor, DiscoveredNode(currentCoord, distance, estimate));
+                    nodeRanks.emplace(estimate, discoveredNodes.find(neighbor), neighbor);
+                } else if (it->optimisticEstimate == HUGE_VAL || distance >= it->travelledDistance) {
                     continue;
                 } else {
                     // Inserting duplicate. Statistics have shown that in
                     // practice only 8% of inserts are duplicates.
-                    it->second = DiscoveredNode(currentIt->first, distance, estimate);
-                    nodeRanks.emplace(estimate, it);
+                    *it = DiscoveredNode(currentCoord, distance, estimate);
+                    nodeRanks.emplace(estimate, it, neighbor);
                 }
             }
         }
