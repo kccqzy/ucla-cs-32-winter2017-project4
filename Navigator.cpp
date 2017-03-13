@@ -111,17 +111,33 @@ private:
         DiscoveredNode(GeoCoord const& parent, double travelledDistance, double optimisticEstimate)
           : parent(parent), travelledDistance(travelledDistance), optimisticEstimate(optimisticEstimate) {}
     };
+    typedef std::map<GeoCoord, DiscoveredNode> NodeMap;
 
     static bool isGeoCoordOnSegment(GeoCoord const& gc, StreetSegment const& ss) {
         return gc == ss.segment.start || gc == ss.segment.end;
     }
 
-    void reconstructPath(std::vector<GeoCoord> const& path, std::vector<NavSegment>&) const {
-        fprintf(stderr, "GeoGraphics[{Red, Thick, GeoPath[{ {%s,%s}", path.front().latitudeText.c_str(),
-                path.front().longitudeText.c_str());
-        for (auto i = std::next(path.begin()); i != path.end(); ++i)
-            fprintf(stderr, ",{%s,%s}", i->latitudeText.c_str(), i->longitudeText.c_str());
-        fprintf(stderr, "}]}]\n");
+    void
+    reconstructPath(GeoCoord const& last, NodeMap const& discoveredNodes, std::vector<NavSegment>& directions) const {
+        // Unimplemented.
+        (void) last;
+        (void) discoveredNodes;
+        (void) directions;
+    }
+
+    bool getInfoFromAttrName(std::string const& attr, GeoCoord& gc, StreetSegment& ss) const {
+        if (!attractionMapper.getGeoCoord(attr, gc)) return false;
+        auto segments = segmentMapper.getSegments(gc);
+        assert(segments.size() == 1);
+        ss = segments.front();
+        return true;
+    }
+
+    void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoord const& routeBegin,
+                            NodeMap& discoveredNodes) const {
+        double distance = distanceEarthKM(startCoord, routeBegin);
+        discoveredNodes.emplace(routeBegin,
+                                DiscoveredNode(routeBegin, distance, distance + distanceEarthKM(routeBegin, endCoord)));
     }
 
 public:
@@ -136,37 +152,14 @@ public:
     }
 
     NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) const {
-        GeoCoord startCoord;
-        if (!attractionMapper.getGeoCoord(start, startCoord)) return NAV_BAD_SOURCE;
-        fprintf(stderr, "Found attraction %s at {%s,%s}\n", start.c_str(), startCoord.latitudeText.c_str(),
-                startCoord.longitudeText.c_str());
-        GeoCoord endCoord;
-        if (!attractionMapper.getGeoCoord(end, endCoord)) return NAV_BAD_DESTINATION;
+        GeoCoord startCoord, endCoord;
+        StreetSegment startStreetSegment, endStreetSegment;
+        if (!getInfoFromAttrName(start, startCoord, startStreetSegment)) return NAV_BAD_SOURCE;
+        if (!getInfoFromAttrName(end, endCoord, endStreetSegment)) return NAV_BAD_SOURCE;
 
-        auto endStreetSegments = segmentMapper.getSegments(endCoord);
-        assert(endStreetSegments.size() == 1);
-        auto endStreetSegment = endStreetSegments.front();
-
-        auto startStreetSegments = segmentMapper.getSegments(startCoord);
-        assert(startStreetSegments.size() == 1);
-        auto startStreetSegment = startStreetSegments.front();
-
-        std::map<GeoCoord, DiscoveredNode> discoveredNodes;
-
-        {
-            double travelledToStart = distanceEarthKM(startCoord, startStreetSegment.segment.start);
-            discoveredNodes.emplace(
-              startStreetSegment.segment.start,
-              DiscoveredNode(startStreetSegment.segment.start, travelledToStart,
-                             travelledToStart + distanceEarthKM(startStreetSegment.segment.start, endCoord)));
-        }
-        {
-            double travelledToEnd = distanceEarthKM(startCoord, startStreetSegment.segment.end);
-            discoveredNodes.emplace(
-              startStreetSegment.segment.end,
-              DiscoveredNode(startStreetSegment.segment.end, travelledToEnd,
-                             travelledToEnd + distanceEarthKM(startStreetSegment.segment.end, endCoord)));
-        }
+        NodeMap discoveredNodes;
+        insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.start, discoveredNodes);
+        insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.end, discoveredNodes);
 
         while (1) {
             auto currentIt =
@@ -174,22 +167,8 @@ public:
                   return a.second.optimisticEstimate < b.second.optimisticEstimate;
               });
             if (currentIt->second.optimisticEstimate == HUGE_VAL) return NAV_NO_ROUTE;
-            fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", currentIt->first.latitudeText.c_str(),
-                    currentIt->first.longitudeText.c_str());
             if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
-                std::vector<GeoCoord> path;
-                path.emplace_back(endCoord);
-                GeoCoord here = currentIt->first;
-                while (1) {
-                    path.emplace_back(here);
-                    if (isGeoCoordOnSegment(here, startStreetSegment)) break;
-                    auto i = discoveredNodes.find(here);
-                    assert(i != discoveredNodes.end());
-                    here = i->second.parent;
-                }
-                path.emplace_back(startCoord);
-                std::reverse(path.begin(), path.end());
-                reconstructPath(path, directions);
+                reconstructPath(currentIt->first, discoveredNodes, directions);
                 return NAV_SUCCESS;
             }
 
