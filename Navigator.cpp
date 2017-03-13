@@ -118,11 +118,28 @@ private:
     }
 
     void
-    reconstructPath(GeoCoord const& last, NodeMap const& discoveredNodes, std::vector<NavSegment>& directions) const {
+    reconstructPath(GeoCoord const& startCoord, GeoCoord const& endCoord, StreetSegment const& startStreetSegment,
+                    GeoCoord const& last, NodeMap const& discoveredNodes, std::vector<NavSegment>& directions) const {
         // Unimplemented.
-        (void) last;
-        (void) discoveredNodes;
         (void) directions;
+        std::vector<GeoCoord> path;
+        path.emplace_back(endCoord);
+        GeoCoord here = last;
+        path.emplace_back(here);
+        while (1) {
+            path.emplace_back(here);
+            if (isGeoCoordOnSegment(here, startStreetSegment)) break;
+            auto i = discoveredNodes.find(here);
+            assert(i != discoveredNodes.end());
+            here = i->second.parent;
+        }
+        path.emplace_back(startCoord);
+        std::reverse(path.begin(), path.end());
+        fprintf(stderr, "GeoGraphics[{Red, Thick, GeoPath[{ {%s,%s}", path.front().latitudeText.c_str(),
+                path.front().longitudeText.c_str());
+        for (auto i = std::next(path.begin()); i != path.end(); ++i)
+            fprintf(stderr, ",{%s,%s}", i->latitudeText.c_str(), i->longitudeText.c_str());
+        fprintf(stderr, "}]}]\n");
     }
 
     bool getInfoFromAttrName(std::string const& attr, GeoCoord& gc, StreetSegment& ss) const {
@@ -176,7 +193,8 @@ public:
               });
             if (currentIt->second.optimisticEstimate == HUGE_VAL) return NAV_NO_ROUTE;
             if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
-                reconstructPath(currentIt->first, discoveredNodes, directions);
+                reconstructPath(startCoord, endCoord, startStreetSegment, currentIt->first, discoveredNodes,
+                                directions);
                 return NAV_SUCCESS;
             }
 
