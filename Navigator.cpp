@@ -14,6 +14,77 @@ bool operator==(GeoCoord const& a, GeoCoord const& b) {
     return std::make_pair(a.latitude, a.longitude) == std::make_pair(b.latitude, b.longitude);
 }
 
+namespace {
+template<typename T, typename Comp>
+class PairingHeap {
+private:
+    struct Node {
+        T d;
+        Node *youngestChild, *olderSibling, *parentOrYoungerSibling;
+    };
+    Comp comp;
+    Node* root;
+    Node* link(Node* a, Node* b) const {
+        if (!a && !b) return nullptr;
+        if (!a) return b;
+        if (!b) return a;
+        assert(!a->olderSibling);
+        assert(!b->olderSibling);
+        if (comp(b->d, a->d)) std::swap(a, b);
+        if (a->youngestChild) {
+            b->olderSibling = a->youngestChild;
+            a->youngestChild = b;
+        } else {
+            a->youngestChild = b;
+        }
+        b->parentOrYoungerSibling = a;
+        a->parentOrYoungerSibling = nullptr;
+        return a;
+    }
+    static Node* unlink(Node* node) {
+        assert(node);
+        assert(node->parentOrYoungerSibling);
+        if (node == node->parentOrYoungerSibling->youngestChild)
+            node->parentOrYoungerSibling->youngestChild = node->olderSibling;
+        else
+            node->parentOrYoungerSibling->olderSibling = node->olderSibling;
+        node->parentOrYoungerSibling = nullptr;
+        node->olderSibling = nullptr;
+        return node;
+    }
+
+public:
+    typedef Node* HeapItem;
+    PairingHeap() : comp{}, root{nullptr} {}
+    Node* findMin() const { return root; }
+    Node* insert(T const& d) {
+        root = link(root, new Node{d, nullptr, nullptr, nullptr});
+        return !comp(root->d, d) && !comp(d, root->d) ? root : root->youngestChild;
+    }
+    void modify(Node* node, T const& newD) {
+        node->d = newD;
+        if (node != root) {
+            unlink(node);
+            root = link(root, node);
+        }
+    }
+    void deleteMin() {
+        Node* oldRoot = root;
+        std::vector<Node*> allChildren;
+        for (Node* i = root->youngestChild; i; i = i->olderSibling) allChildren.push_back(i);
+        for (Node* i : allChildren) {
+            i->olderSibling = nullptr;
+            i->parentOrYoungerSibling = nullptr;
+        }
+        for (size_t i = 0; i < (allChildren.size() & (~1ull)); i += 2)
+            allChildren[i] = link(allChildren[i], allChildren[i | 1]);
+        root = (allChildren.size() & 1) ? allChildren.back() : nullptr;
+        for (size_t i = (allChildren.size() & (~1ull)); i; i -= 2) root = link(root, allChildren[i - 2]);
+        delete oldRoot;
+    }
+};
+}
+
 class NavigatorImpl {
 private:
     SegmentMapper segmentMapper;
