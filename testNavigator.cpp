@@ -16,11 +16,13 @@ int main() {
     Navigator nav;
     bool r = nav.loadMapData("mapdata.txt");
     assert(r);
-    testNav(nav, "1061 Broxton Avenue", "Headlines!");
-    testNav(nav, "UCLA Opus Project", "UCLA Wilshire Center");
-    testNav(nav, "Intramural Field", "Covel Commons");
-    testNav(nav, "David Geffen School of Medicine", "Covel Commons");
-    testNav(nav, "David Geffen School of Medicine", "Twentieth Century Fox Film Corporation");
-    testNav(nav, "Literati Cafe", "Residence Inn by Marriott Beverly Hills");
-    testNav(nav, "Fresh corn grill ", "Saint Sebastian School");
+    for (volatile int i = 0; i < 200; ++i) {
+        testNav(nav, "1061 Broxton Avenue", "Headlines!");
+        testNav(nav, "UCLA Opus Project", "UCLA Wilshire Center");
+        testNav(nav, "Intramural Field", "Covel Commons");
+        testNav(nav, "David Geffen School of Medicine", "Covel Commons");
+        testNav(nav, "David Geffen School of Medicine", "Twentieth Century Fox Film Corporation");
+        testNav(nav, "Literati Cafe", "Residence Inn by Marriott Beverly Hills");
+        testNav(nav, "Fresh corn grill ", "Saint Sebastian School");
+    }
 }
