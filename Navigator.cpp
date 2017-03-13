@@ -157,6 +157,14 @@ public:
         if (!getInfoFromAttrName(start, startCoord, startStreetSegment)) return NAV_BAD_SOURCE;
         if (!getInfoFromAttrName(end, endCoord, endStreetSegment)) return NAV_BAD_SOURCE;
 
+        if (startStreetSegment.segment.start.latitude == endStreetSegment.segment.start.latitude &&
+            startStreetSegment.segment.start.longitude == endStreetSegment.segment.start.longitude &&
+            startStreetSegment.segment.end.latitude == endStreetSegment.segment.end.latitude &&
+            startStreetSegment.segment.end.longitude == endStreetSegment.segment.end.longitude) {
+            // reconstructDirectPath();
+            return NAV_SUCCESS;
+        }
+
         NodeMap discoveredNodes;
         insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.start, discoveredNodes);
         insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.end, discoveredNodes);
