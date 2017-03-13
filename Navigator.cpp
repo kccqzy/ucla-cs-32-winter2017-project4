@@ -182,7 +182,7 @@ public:
         GeoCoord startCoord, endCoord;
         StreetSegment startStreetSegment, endStreetSegment;
         if (!getInfoFromAttrName(start, startCoord, startStreetSegment)) return NAV_BAD_SOURCE;
-        if (!getInfoFromAttrName(end, endCoord, endStreetSegment)) return NAV_BAD_SOURCE;
+        if (!getInfoFromAttrName(end, endCoord, endStreetSegment)) return NAV_BAD_DESTINATION;
 
         if (startStreetSegment.segment.start.latitude == endStreetSegment.segment.start.latitude &&
             startStreetSegment.segment.start.longitude == endStreetSegment.segment.start.longitude &&
