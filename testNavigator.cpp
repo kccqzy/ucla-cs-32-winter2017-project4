@@ -16,7 +16,7 @@ int main() {
     Navigator nav;
     bool r = nav.loadMapData("mapdata.txt");
     assert(r);
-    for (volatile int i = 0; i < 200; ++i) {
+    for (volatile int i = 0; i < 1000; ++i) {
         testNav(nav, "1061 Broxton Avenue", "Headlines!");
         testNav(nav, "UCLA Opus Project", "UCLA Wilshire Center");
         testNav(nav, "Intramural Field", "Covel Commons");

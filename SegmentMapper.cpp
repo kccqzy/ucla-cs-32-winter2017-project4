@@ -19,15 +19,11 @@ struct RawCoord : public std::pair<int64_t, int64_t> {
     RawCoord(GeoCoord const& gc) : RawCoord(gc.latitude, gc.longitude) {}
 };
 
-template<typename V>
-using CoordMap = MyMap<RawCoord, V>;
-
 class SegmentMapperImpl {
 private:
-    std::vector<StreetSegment> m_segments;
-    CoordMap<std::vector<StreetSegment const*>> m_map;
+    MyMap<RawCoord, std::vector<StreetSegment>> m_map;
 
-    void insertInto(GeoCoord const& gc, StreetSegment const* sg) {
+    void insertInto(GeoCoord const& gc, StreetSegment const& sg) {
         if (auto* segs = m_map.find(gc))
             segs->push_back(sg);
         else
@@ -37,24 +33,17 @@ private:
 public:
     void init(const MapLoader& ml) {
         m_map.clear();
-        m_segments.clear();
-        m_segments.reserve(ml.getNumSegments());
         for (size_t i = 0, ie = ml.getNumSegments(); i < ie; ++i) {
             StreetSegment seg;
             if (!ml.getSegment(i, seg)) assert(false && "cannot get valid segment index");
-            m_segments.emplace_back(std::move(seg));
-        }
-        for (auto const& seg : m_segments) {
-            insertInto(seg.segment.start, &seg);
-            insertInto(seg.segment.end, &seg);
-            for (auto const& attr : seg.attractions) insertInto(attr.geocoordinates, &seg);
+            insertInto(seg.segment.start, seg);
+            insertInto(seg.segment.end, seg);
+            for (auto const& attr : seg.attractions) insertInto(attr.geocoordinates, seg);
         }
     }
-    auto getSegments(const GeoCoord& gc) const {
-        std::vector<StreetSegment> segments;
-        if (auto const* segs = m_map.find(gc))
-            for (auto const* seg : *segs) segments.emplace_back(*seg);
-        return segments;
+    std::vector<StreetSegment> getSegments(const GeoCoord& gc) const {
+        if (auto const* segs = m_map.find(gc)) return *segs;
+        return {};
     }
 };
 
