@@ -1,8 +1,10 @@
 #include "provided.h"
+#include "support.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <deque>
+#include <cstdint>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -112,6 +114,13 @@ private:
           : parent(parent), travelledDistance(travelledDistance), optimisticEstimate(optimisticEstimate) {}
     };
     typedef std::map<GeoCoord, DiscoveredNode> NodeMap;
+    struct RankedNode {
+        double rank;
+        NodeMap::iterator it;
+        RankedNode(double rank, NodeMap::iterator it) : rank(rank), it(it) {}
+        friend bool operator<(RankedNode const& a, RankedNode const& b) { return a.rank > b.rank; }
+    };
+    typedef std::priority_queue<RankedNode> NodeRanks;
 
     static bool isGeoCoordOnSegment(GeoCoord const& gc, StreetSegment const& ss) {
         return gc == ss.segment.start || gc == ss.segment.end;
@@ -150,11 +159,12 @@ private:
         return true;
     }
 
-    void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoord const& routeBegin,
-                            NodeMap& discoveredNodes) const {
+    static void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoord const& routeBegin,
+                                   NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
         double distance = distanceEarthKM(startCoord, routeBegin);
-        discoveredNodes.emplace(routeBegin,
-                                DiscoveredNode(routeBegin, distance, distance + distanceEarthKM(routeBegin, endCoord)));
+        double estimate = distance + distanceEarthKM(routeBegin, endCoord);
+        nodeRanks.emplace(estimate,
+                          discoveredNodes.emplace(routeBegin, DiscoveredNode(routeBegin, distance, estimate)).first);
     }
 
 public:
@@ -183,15 +193,38 @@ public:
         }
 
         NodeMap discoveredNodes;
-        insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.start, discoveredNodes);
-        insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.end, discoveredNodes);
+        NodeRanks nodeRanks;
+        insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.start, discoveredNodes, nodeRanks);
+        insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.end, discoveredNodes, nodeRanks);
 
-        while (1) {
-            auto currentIt =
-              std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
-                  return a.second.optimisticEstimate < b.second.optimisticEstimate;
-              });
-            if (currentIt->second.optimisticEstimate == HUGE_VAL) return NAV_NO_ROUTE;
+        while (!nodeRanks.empty()) {
+            fprintf(stderr, "There are %zu nodes in the tree and %zu nodes in the priority_queue.\n",
+                    discoveredNodes.size(), nodeRanks.size());
+            auto currentIt = nodeRanks.top().it;
+            fprintf(stderr,
+                    "Receiving new node {%s,%s} from priority_queue with saved estimate = %.5f, distance = %.5f and "
+                    "actual estimate = %.5f\n",
+                    currentIt->first.latitudeText.c_str(), currentIt->first.longitudeText.c_str(), nodeRanks.top().rank,
+                    currentIt->second.travelledDistance, currentIt->second.optimisticEstimate);
+            nodeRanks.pop();
+            if (currentIt->second.optimisticEstimate == HUGE_VAL) continue;
+            fprintf(stderr,
+                    "Investigating new node {%s,%s} distance = %.5f and "
+                    "actual estimate = %.5f\n",
+                    currentIt->first.latitudeText.c_str(), currentIt->first.longitudeText.c_str(),
+                    currentIt->second.travelledDistance, currentIt->second.optimisticEstimate);
+            {
+                auto actualIt =
+                  std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
+                      return a.second.optimisticEstimate < b.second.optimisticEstimate;
+                  });
+                fprintf(stderr,
+                        "Should investigate new node {%s,%s} distance = %.5f and "
+                        "actual estimate = %.5f\n",
+                        actualIt->first.latitudeText.c_str(), actualIt->first.longitudeText.c_str(),
+                        actualIt->second.travelledDistance, actualIt->second.optimisticEstimate);
+                assert(actualIt == currentIt);
+            }
             if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
                 reconstructPath(startCoord, endCoord, startStreetSegment, currentIt->first, discoveredNodes,
                                 directions);
@@ -202,18 +235,22 @@ public:
             for (auto const& neighbor : getNeighbors(currentIt->first)) {
                 double distance = currentIt->second.travelledDistance + distanceEarthKM(currentIt->first, neighbor);
                 assert(distance > 0);
+                double estimate = distance + distanceEarthKM(neighbor, endCoord);
+                assert(estimate > 0);
                 auto it = discoveredNodes.find(neighbor);
                 if (it == discoveredNodes.end())
-                    discoveredNodes.emplace(neighbor, DiscoveredNode(currentIt->first, distance,
-                                                                     distance + distanceEarthKM(neighbor, endCoord)));
+                    nodeRanks.emplace(
+                      estimate,
+                      discoveredNodes.emplace(neighbor, DiscoveredNode(currentIt->first, distance, estimate)).first);
                 else if (it->second.optimisticEstimate == HUGE_VAL || distance >= it->second.travelledDistance)
                     continue;
-                else
-                    it->second =
-                      DiscoveredNode(currentIt->first, distance, distance + distanceEarthKM(neighbor, endCoord));
+                else {
+                    it->second = DiscoveredNode(currentIt->first, distance, estimate);
+                    nodeRanks.emplace(estimate, it);
+                }
             }
         }
-        assert(false && "unreachable");
+        return NAV_NO_ROUTE;
     }
 };
 
