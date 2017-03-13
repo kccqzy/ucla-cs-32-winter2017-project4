@@ -1,6 +1,7 @@
 #include "provided.h"
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <deque>
 #include <string>
 #include <vector>
@@ -168,18 +169,18 @@ public:
                              travelledToEnd + distanceEarthKM(startStreetSegment.segment.end, endCoord)));
         }
 
-        while (!discoveredNodes.empty()) {
+        while (1) {
             auto currentIt =
               std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
                   return a.second.optimisticEstimate < b.second.optimisticEstimate;
               });
-            auto current = *currentIt;
-            fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", current.first.latitudeText.c_str(),
-                    current.first.longitudeText.c_str());
-            if (isGeoCoordOnSegment(current.first, endStreetSegment)) {
+            if (currentIt->second.optimisticEstimate == HUGE_VAL) break;
+            fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", currentIt->first.latitudeText.c_str(),
+                    currentIt->first.longitudeText.c_str());
+            if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
                 std::vector<GeoCoord> path;
                 path.emplace_back(endCoord);
-                GeoCoord here = current.first;
+                GeoCoord here = currentIt->first;
                 while (1) {
                     path.emplace_back(here);
                     if (isGeoCoordOnSegment(here, startStreetSegment)) break;
@@ -198,28 +199,28 @@ public:
                 return NAV_SUCCESS;
             }
 
-            discoveredNodes.erase(currentIt);
-            evaluatedNodes.emplace(current.first, current.second.parent);
-            for (auto const& neighbor : getNeighbors(current.first)) {
+            currentIt->second.optimisticEstimate = HUGE_VAL;
+            evaluatedNodes.emplace(currentIt->first, currentIt->second.parent);
+            for (auto const& neighbor : getNeighbors(currentIt->first)) {
                 if (evaluatedNodes.find(neighbor) != evaluatedNodes.end()) {
                     fprintf(stderr, "Skipping coord {%s,%s} because it has already been evaluated.\n",
                             neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
                     continue;
                 }
                 fprintf(stderr, "Investigating GeoGraphics[{Red,Thick,GeoPath[{{%s,%s},{%s,%s}}]}]\n",
-                        current.first.latitudeText.c_str(), current.first.longitudeText.c_str(),
+                        currentIt->first.latitudeText.c_str(), currentIt->first.longitudeText.c_str(),
                         neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
-                double distance = current.second.travelledDistance + distanceEarthKM(current.first, neighbor);
+                double distance = currentIt->second.travelledDistance + distanceEarthKM(currentIt->first, neighbor);
                 assert(distance > 0);
                 auto it = discoveredNodes.find(neighbor);
                 if (it == discoveredNodes.end())
-                    discoveredNodes.emplace(neighbor, DiscoveredNode(current.first, distance,
+                    discoveredNodes.emplace(neighbor, DiscoveredNode(currentIt->first, distance,
                                                                      distance + distanceEarthKM(neighbor, endCoord)));
                 else if (distance >= it->second.travelledDistance)
                     continue;
                 else
                     it->second =
-                      DiscoveredNode(current.first, distance, distance + distanceEarthKM(neighbor, endCoord));
+                      DiscoveredNode(currentIt->first, distance, distance + distanceEarthKM(neighbor, endCoord));
             }
         }
         return NAV_NO_ROUTE;
