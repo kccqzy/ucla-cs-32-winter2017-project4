@@ -26,12 +26,12 @@ private:
     Arena nodes;
     Node* root;
 
-    bool is_red(Node* p) const {
+    bool isRed(Node* p) const {
         if (!p) return false; // Null links are black
         return p->color == Color::Red;
     }
 
-    Node* rotate_left(Node* h) {
+    Node* rotateLeft(Node* h) {
         Node* x = h->right;
         h->right = x->left;
         x->left = h;
@@ -40,7 +40,7 @@ private:
         return x;
     }
 
-    Node* rotate_right(Node* h) {
+    Node* rotateRight(Node* h) {
         Node* x = h->left;
         h->left = x->right;
         x->right = h;
@@ -49,38 +49,38 @@ private:
         return x;
     }
 
-    void move_red_up(Node* h) {
+    void moveRedUp(Node* h) {
         h->color = Color::Red;
         h->left->color = Color::Black;
         h->right->color = Color::Black;
     }
 
-    Node* find_node(Node* p, K const& k) const {
+    Node* findNode(Node* p, K const& k) const {
         if (!p) return p;
-        if (p->key < k) return find_node(p->right, k);
-        if (k < p->key) return find_node(p->left, k);
+        if (p->key < k) return findNode(p->right, k);
+        if (k < p->key) return findNode(p->left, k);
         return p;
     }
 
-    Node* insert_node(Node* node, K const& k, V const& v) {
+    Node* insertNode(Node* node, K const& k, V const& v) {
         if (!node) {
             nodes.emplace_back(k, v);
             return &nodes.back();
         }
         if (node->key < k) {
-            auto new_right = insert_node(node->right, k, v);
-            node->right = new_right;
+            auto newRight = insertNode(node->right, k, v);
+            node->right = newRight;
         } else if (k < node->key) {
-            auto new_left = insert_node(node->left, k, v);
-            node->left = new_left;
+            auto newLeft = insertNode(node->left, k, v);
+            node->left = newLeft;
         } else {
             node->key = k;
             node->value = v;
         }
 
-        if (is_red(node->right) && !is_red(node->left)) node = rotate_left(node);
-        if (is_red(node->left) && is_red(node->left->left)) node = rotate_right(node);
-        if (is_red(node->left) && is_red(node->right)) move_red_up(node);
+        if (isRed(node->right) && !isRed(node->left)) node = rotateLeft(node);
+        if (isRed(node->left) && isRed(node->left->left)) node = rotateRight(node);
+        if (isRed(node->left) && isRed(node->right)) moveRedUp(node);
 
         return node;
     }
@@ -94,15 +94,15 @@ public:
     }
     int size() const { return nodes.size(); }
     void associate(const K& key, const V& value) {
-        root = insert_node(root, key, value);
+        root = insertNode(root, key, value);
         root->color = Color::Black;
     }
     V const* find(K const& key) const {
-        if (Node* p = find_node(root, key)) return &p->value;
+        if (Node* p = findNode(root, key)) return &p->value;
         return nullptr;
     }
     V* find(K const& key) {
-        if (Node* p = find_node(root, key)) return &p->value;
+        if (Node* p = findNode(root, key)) return &p->value;
         return nullptr;
     }
     MyMap(MyMap const&) = delete;
