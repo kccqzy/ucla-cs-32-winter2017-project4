@@ -198,33 +198,9 @@ public:
         insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.end, discoveredNodes, nodeRanks);
 
         while (!nodeRanks.empty()) {
-            fprintf(stderr, "There are %zu nodes in the tree and %zu nodes in the priority_queue.\n",
-                    discoveredNodes.size(), nodeRanks.size());
             auto currentIt = nodeRanks.top().it;
-            fprintf(stderr,
-                    "Receiving new node {%s,%s} from priority_queue with saved estimate = %.5f, distance = %.5f and "
-                    "actual estimate = %.5f\n",
-                    currentIt->first.latitudeText.c_str(), currentIt->first.longitudeText.c_str(), nodeRanks.top().rank,
-                    currentIt->second.travelledDistance, currentIt->second.optimisticEstimate);
             nodeRanks.pop();
             if (currentIt->second.optimisticEstimate == HUGE_VAL) continue;
-            fprintf(stderr,
-                    "Investigating new node {%s,%s} distance = %.5f and "
-                    "actual estimate = %.5f\n",
-                    currentIt->first.latitudeText.c_str(), currentIt->first.longitudeText.c_str(),
-                    currentIt->second.travelledDistance, currentIt->second.optimisticEstimate);
-            {
-                auto actualIt =
-                  std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
-                      return a.second.optimisticEstimate < b.second.optimisticEstimate;
-                  });
-                fprintf(stderr,
-                        "Should investigate new node {%s,%s} distance = %.5f and "
-                        "actual estimate = %.5f\n",
-                        actualIt->first.latitudeText.c_str(), actualIt->first.longitudeText.c_str(),
-                        actualIt->second.travelledDistance, actualIt->second.optimisticEstimate);
-                assert(actualIt == currentIt);
-            }
             if (isGeoCoordOnSegment(currentIt->first, endStreetSegment)) {
                 reconstructPath(startCoord, endCoord, startStreetSegment, currentIt->first, discoveredNodes,
                                 directions);
