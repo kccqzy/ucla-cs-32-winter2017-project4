@@ -66,7 +66,8 @@ public:
     NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) const {
         GeoCoord startCoord;
         if (!attractionMapper.getGeoCoord(start, startCoord)) return NAV_BAD_SOURCE;
-        fprintf(stderr, "Found attraction %s at {%s,%s}\n", start.c_str(), startCoord.latitudeText.c_str(), startCoord.longitudeText.c_str());
+        fprintf(stderr, "Found attraction %s at {%s,%s}\n", start.c_str(), startCoord.latitudeText.c_str(),
+                startCoord.longitudeText.c_str());
         GeoCoord endCoord;
         if (!attractionMapper.getGeoCoord(end, endCoord)) return NAV_BAD_DESTINATION;
 
@@ -85,26 +86,25 @@ public:
             double travelledToStart = distanceEarthKM(startCoord, startStreetSegment.segment.start);
             discoveredNodes.emplace(
               startStreetSegment.segment.start,
-              DiscoveredNode(startStreetSegment.segment.start,
-                             travelledToStart + distanceEarthKM(startStreetSegment.segment.start, endCoord),
-                             travelledToStart));
+              DiscoveredNode(startStreetSegment.segment.start, travelledToStart,
+                             travelledToStart + distanceEarthKM(startStreetSegment.segment.start, endCoord)));
         }
         {
             double travelledToEnd = distanceEarthKM(startCoord, startStreetSegment.segment.end);
             discoveredNodes.emplace(
               startStreetSegment.segment.end,
-              DiscoveredNode(startStreetSegment.segment.end,
-                             travelledToEnd + distanceEarthKM(startStreetSegment.segment.end, endCoord),
-                             travelledToEnd));
+              DiscoveredNode(startStreetSegment.segment.end, travelledToEnd,
+                             travelledToEnd + distanceEarthKM(startStreetSegment.segment.end, endCoord)));
         }
 
         while (!discoveredNodes.empty()) {
             auto currentIt =
               std::min_element(discoveredNodes.begin(), discoveredNodes.end(), [](auto const& a, auto const& b) {
-                  return a.second.travelledDistance < b.second.travelledDistance;
+                  return a.second.optimisticEstimate < b.second.optimisticEstimate;
               });
             auto current = *currentIt;
-            fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", current.first.latitudeText.c_str(), current.first.longitudeText.c_str());
+            fprintf(stderr, "Relaxing edges starting from {%s,%s}\n", current.first.latitudeText.c_str(),
+                    current.first.longitudeText.c_str());
             if (isGeoCoordOnSegment(current.first, endStreetSegment)) {
                 std::vector<GeoCoord> path;
                 path.emplace_back(endCoord);
@@ -138,18 +138,17 @@ public:
                 fprintf(stderr, "Investigating GeoGraphics[{Red,Thick,GeoPath[{{%s,%s},{%s,%s}}]}]\n",
                         current.first.latitudeText.c_str(), current.first.longitudeText.c_str(),
                         neighbor.latitudeText.c_str(), neighbor.longitudeText.c_str());
-                double distance = current.second.optimisticEstimate + distanceEarthKM(current.first, neighbor);
+                double distance = current.second.travelledDistance + distanceEarthKM(current.first, neighbor);
                 assert(distance > 0);
                 auto it = discoveredNodes.find(neighbor);
                 if (it == discoveredNodes.end())
-                    discoveredNodes.emplace(
-                      neighbor,
-                      DiscoveredNode(current.first, distance + distanceEarthKM(neighbor, endCoord), distance));
+                    discoveredNodes.emplace(neighbor, DiscoveredNode(current.first, distance,
+                                                                     distance + distanceEarthKM(neighbor, endCoord)));
                 else if (distance >= it->second.travelledDistance)
                     continue;
                 else
                     it->second =
-                      DiscoveredNode(current.first, distance + distanceEarthKM(neighbor, endCoord), distance);
+                      DiscoveredNode(current.first, distance, distance + distanceEarthKM(neighbor, endCoord));
             }
         }
         return NAV_NO_ROUTE;
