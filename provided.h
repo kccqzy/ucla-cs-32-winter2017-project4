@@ -7,7 +7,7 @@
 struct GeoCoord
 {
 	GeoCoord(std::string lat, std::string lon)
-     : latitudeText(lat), longitudeText(lon), latitude(stod(lat)), longitude(stod(lon))
+     : latitudeText(lat), longitudeText(lon), latitude(std::stod(lat)), longitude(std::stod(lon))
 	{}
 
 	GeoCoord()
@@ -117,7 +117,7 @@ public:
 	NavCommand	m_command;	    // PROCEED or TURN
 	std::string	m_direction;	// e.g., "north" for proceed or "left" for turn
 	std::string	m_streetName;	// e.g., Westwood Blvd
-	double		m_distance;		// for proceed, distance in kilometers
+	double		m_distance;		// for proceed, distance in miles
 	GeoSegment	m_geoSegment;
 };
 
