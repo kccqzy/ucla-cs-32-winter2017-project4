@@ -35,10 +35,10 @@ private:
 
     struct DiscoveredNode {
         GeoCoord parent;
-        double travelledDistance;
-        double optimisticEstimate;
-        DiscoveredNode(GeoCoord const& parent, double travelledDistance, double optimisticEstimate)
-          : parent(parent), travelledDistance(travelledDistance), optimisticEstimate(optimisticEstimate) {}
+        double distance;
+        double estimate;
+        DiscoveredNode(GeoCoord const& parent, double distance, double estimate)
+          : parent(parent), distance(distance), estimate(estimate) {}
     };
     typedef MyMap<GeoCoord, DiscoveredNode> NodeMap;
     struct RankedNode {
@@ -54,7 +54,7 @@ private:
         return gc == ss.segment.start || gc == ss.segment.end;
     }
 
-    void
+    NavResult
     reconstructPath(GeoCoord const& startCoord, GeoCoord const& endCoord, StreetSegment const& startStreetSegment,
                     GeoCoord const& last, NodeMap const& discoveredNodes, std::vector<NavSegment>& directions) const {
         // Unimplemented.
@@ -77,6 +77,7 @@ private:
         for (auto i = std::next(path.begin()); i != path.end(); ++i)
             fprintf(stderr, ",{%s,%s}", i->latitudeText.c_str(), i->longitudeText.c_str());
         fprintf(stderr, "}]}]\n");
+        return NAV_SUCCESS;
     }
 
     bool getInfoFromAttrName(std::string const& attr, GeoCoord& gc, StreetSegment& ss) const {
@@ -98,12 +99,10 @@ private:
 public:
     bool loadMapData(std::string const& mapFile) {
         MapLoader ml;
-        if (ml.load(mapFile)) {
-            segmentMapper.init(ml);
-            attractionMapper.init(ml);
-            return true;
-        }
-        return false;
+        if (!ml.load(mapFile)) return false;
+        segmentMapper.init(ml);
+        attractionMapper.init(ml);
+        return true;
     }
 
     NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) const {
@@ -129,34 +128,31 @@ public:
             auto currentIt = nodeRanks.top().it;
             auto currentCoord = nodeRanks.top().coord;
             nodeRanks.pop();
-            if (currentIt->optimisticEstimate == HUGE_VAL) {
-                // The priority_queue might contain duplicates, and the later
-                // ones might have already been evaluated.
-                continue;
-            }
-            if (isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
-                reconstructPath(startCoord, endCoord, startStreetSegment, currentCoord, discoveredNodes, directions);
-                return NAV_SUCCESS;
-            }
+            if (currentIt->estimate == HUGE_VAL) continue;
+            // The priority_queue might contain duplicates, and the later
+            // ones might have already been evaluated.
+
+            if (isGeoCoordOnSegment(currentCoord, endStreetSegment))
+                // Found it. Success.
+                return reconstructPath(startCoord, endCoord, startStreetSegment, currentCoord, discoveredNodes,
+                                       directions);
 
             // Use this as a marker for completion of evaluation of a node.
-            currentIt->optimisticEstimate = HUGE_VAL;
+            currentIt->estimate = HUGE_VAL;
             for (auto const& neighbor : getNeighbors(currentCoord)) {
-                double distance = currentIt->travelledDistance + distanceEarthKM(currentCoord, neighbor);
+                double distance = currentIt->distance + distanceEarthKM(currentCoord, neighbor);
                 assert(distance > 0);
                 double estimate = distance + distanceEarthKM(neighbor, endCoord);
                 assert(estimate > 0);
-                auto it = discoveredNodes.find(neighbor);
-                if (!it) {
-                    discoveredNodes.associate(neighbor, DiscoveredNode(currentCoord, distance, estimate));
-                    nodeRanks.emplace(estimate, discoveredNodes.find(neighbor), neighbor);
-                } else if (it->optimisticEstimate == HUGE_VAL || distance >= it->travelledDistance) {
-                    continue;
-                } else {
+                if (auto it = discoveredNodes.find(neighbor)) {
+                    if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
                     // Inserting duplicate. Statistics have shown that in
                     // practice only 8% of inserts are duplicates.
                     *it = DiscoveredNode(currentCoord, distance, estimate);
                     nodeRanks.emplace(estimate, it, neighbor);
+                } else {
+                    discoveredNodes.associate(neighbor, DiscoveredNode(currentCoord, distance, estimate));
+                    nodeRanks.emplace(estimate, discoveredNodes.find(neighbor), neighbor);
                 }
             }
         }
