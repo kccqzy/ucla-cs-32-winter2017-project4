@@ -27,9 +27,10 @@ private:
                 rv.emplace_back(seg.segment.end);
             else if (gc == seg.segment.end)
                 rv.emplace_back(seg.segment.start);
-            else
-                assert(false && "getNeighbors: the provided coord is not the beginning or end of a street segment");
+            // A coordinate can be both the beginning or end of a street segment
+            // as well as an attraction.
         }
+        assert(!rv.empty() && "getNeighbors: the provided coord is not the beginning or end of a street segment");
         return rv;
     }
 
@@ -83,8 +84,20 @@ private:
     bool getInfoFromAttrName(std::string const& attr, GeoCoord& gc, StreetSegment& ss) const {
         if (!attractionMapper.getGeoCoord(attr, gc)) return false;
         auto segments = segmentMapper.getSegments(gc);
-        assert(segments.size() == 1);
-        ss = segments.front();
+        assert(!segments.empty());
+        // There might legitimately be multiple street segments here due to a
+        // coordinate might be both the beginning or end of a street segment as
+        // well as an attraction.
+        if (segments.size() == 1)
+            ss = segments.front();
+        else {
+            auto p = std::find_if(segments.cbegin(), segments.cend(), [&attr](StreetSegment const& thisStreet) {
+                return std::any_of(thisStreet.attractions.cbegin(), thisStreet.attractions.cend(),
+                                   [&attr](Attraction const& thisAttr) { return thisAttr.name == attr; });
+            });
+            assert(p != segments.cend());
+            ss = *p;
+        }
         return true;
     }
 
@@ -125,12 +138,24 @@ public:
         insertInitialNodes(startCoord, endCoord, startStreetSegment.segment.end, discoveredNodes, nodeRanks);
 
         while (!nodeRanks.empty()) {
+            fprintf(stderr, "In this iteration, there are %d nodes in the tree and %zu nodes in the priority_queue.\n",
+                    discoveredNodes.size(), nodeRanks.size());
             auto currentIt = nodeRanks.top().it;
             auto currentCoord = nodeRanks.top().coord;
+            fprintf(stderr,
+                    "Receiving new node {%s,%s} from priority_queue with saved estimate = %.5f, distance = %.5f and "
+                    "actual estimate = %.5f\n",
+                    currentCoord.latitudeText.c_str(), currentCoord.longitudeText.c_str(), nodeRanks.top().rank,
+                    currentIt->distance, currentIt->estimate);
             nodeRanks.pop();
             if (currentIt->estimate == HUGE_VAL) continue;
             // The priority_queue might contain duplicates, and the later
             // ones might have already been evaluated.
+            fprintf(stderr,
+                    "Investigating new node {%s,%s} from priority_queue with distance = %.5f and "
+                    "actual estimate = %.5f\n",
+                    currentCoord.latitudeText.c_str(), currentCoord.longitudeText.c_str(), currentIt->distance,
+                    currentIt->estimate);
 
             if (isGeoCoordOnSegment(currentCoord, endStreetSegment))
                 // Found it. Success.

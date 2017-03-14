@@ -3,6 +3,7 @@
 #include "Navigator.cpp"
 #include "SegmentMapper.cpp"
 #include <cassert>
+#include <cstdio>
 
 void testNav(Navigator const& nav, std::string const& begin, std::string const& end) {
     std::vector<NavSegment> directions;
@@ -10,7 +11,7 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
     NavResult nr = nav.navigate(begin, end, directions);
     fprintf(stderr, "Navigation result = %d\n", nr);
     assert(nr != NAV_BAD_SOURCE && nr != NAV_BAD_DESTINATION);
-    assert(nr == NAV_SUCCESS);
+    if (nr != NAV_SUCCESS) printf("***** No route from %s to %s.\n", begin.c_str(), end.c_str());
 }
 
 int main() {
