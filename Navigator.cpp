@@ -68,6 +68,7 @@ private:
         case 5: return "southwest";
         case 6: return "south";
         case 7: return "southeast";
+        case 8: return "east";
         default: assert(false && "invalid bearing when describing direction");
         }
     }
