@@ -58,8 +58,7 @@ private:
     }
 
     static std::string describeDirection(double bearingDeg) {
-        int direction = std::floor((bearingDeg + 22.5) / 45.0);
-        switch (direction) {
+        switch (static_cast<int>(std::floor((bearingDeg + 22.5) / 45.0)) % 8) {
         case 0: return "east";
         case 1: return "northeast";
         case 2: return "north";
@@ -68,8 +67,7 @@ private:
         case 5: return "southwest";
         case 6: return "south";
         case 7: return "southeast";
-        case 8: return "east";
-        default: assert(false && "invalid bearing when describing direction");
+        default: assert(false);
         }
     }
 
