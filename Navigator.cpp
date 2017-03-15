@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <queue>
 #include <string>
 #include <vector>
@@ -21,17 +22,23 @@ private:
     AttractionMapper attractionMapper;
 
     typedef std::string StreetName;
-    auto getNeighbors(GeoCoord const& gc) const {
-        std::vector<std::pair<GeoCoord, StreetName>> rv;
-        for (auto const& seg : segmentMapper.getSegments(gc)) {
+    typedef std::shared_ptr<std::vector<std::pair<GeoCoord, StreetName>>> Neighbors;
+    MyMap<GeoCoord, Neighbors> neighborMap;
+    Neighbors getNeighbors(GeoCoord const& gc) {
+        if (Neighbors* neighbors = neighborMap.find(gc)) return *neighbors;
+        auto rv = std::make_shared<std::vector<std::pair<GeoCoord, StreetName>>>();
+        auto segments = segmentMapper.getSegments(gc);
+        rv->reserve(segments.size());
+        for (auto const& seg : segments) {
             if (gc == seg.segment.start)
-                rv.emplace_back(seg.segment.end, seg.streetName);
+                rv->emplace_back(seg.segment.end, seg.streetName);
             else if (gc == seg.segment.end)
-                rv.emplace_back(seg.segment.start, seg.streetName);
+                rv->emplace_back(seg.segment.start, seg.streetName);
             // A coordinate can be both the beginning or end of a street segment
             // as well as an attraction.
         }
-        assert(!rv.empty() && "getNeighbors: the provided coord is not the beginning or end of a street segment");
+        assert(!rv->empty() && "getNeighbors: the provided coord is not the beginning or end of a street segment");
+        neighborMap.associate(gc, rv);
         return rv;
     }
 
@@ -148,7 +155,7 @@ public:
         return true;
     }
 
-    NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) const {
+    NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) {
         GeoCoord startCoord, endCoord;
         StreetSegment startStreetSegment, endStreetSegment;
         if (!getInfoFromAttrName(start, startCoord, startStreetSegment)) return NAV_BAD_SOURCE;
@@ -183,7 +190,7 @@ public:
 
             // Use this as a marker for completion of evaluation of a node.
             currentIt->estimate = HUGE_VAL;
-            for (auto const& neighbor : getNeighbors(currentCoord)) {
+            for (auto const& neighbor : *getNeighbors(currentCoord)) {
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, neighbor.first);
                 assert(distance > 0);
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);

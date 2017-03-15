@@ -69,6 +69,7 @@ int main() {
                                             "1061 Broxton Avenue",
                                             "Ami Sushi",
                                             "Barney's Beanery",
+#if 0
                                             "Five Guys",
                                             "Regent",
                                             "1067 Broxton Avenue",
@@ -684,6 +685,7 @@ int main() {
                                             "UCLA Wilshire Center",
                                             "10960 Wilshire Boulevard",
                                             "10980 Wilshire Boulevard",
+#endif
                                             "Saint Sebastian School"};
     for (size_t i = 0; i < allAttractions.size(); ++i)
         for (size_t j = i + 1; j < allAttractions.size(); ++j) testNav(nav, allAttractions[i], allAttractions[j]);
