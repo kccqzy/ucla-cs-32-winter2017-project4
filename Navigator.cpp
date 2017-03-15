@@ -102,7 +102,6 @@ private:
         }
         directions.emplace_back(makeProceedSegment(startCoord, here, startStreetSegment.streetName));
         std::reverse(directions.begin(), directions.end());
-        fprintf(stderr, "Successfully constructed turn-by-turn navigation with %zu steps\n", directions.size());
         return NAV_SUCCESS;
     }
 
@@ -171,24 +170,12 @@ public:
                            discoveredNodes, nodeRanks);
 
         while (!nodeRanks.empty()) {
-            fprintf(stderr, "In this iteration, there are %d nodes in the tree and %zu nodes in the priority_queue.\n",
-                    discoveredNodes.size(), nodeRanks.size());
             auto currentIt = nodeRanks.top().it;
             auto currentCoord = nodeRanks.top().coord;
-            fprintf(stderr,
-                    "Receiving new node {%s,%s} from priority_queue with saved estimate = %.5f, distance = %.5f and "
-                    "actual estimate = %.5f\n",
-                    currentCoord.latitudeText.c_str(), currentCoord.longitudeText.c_str(), nodeRanks.top().rank,
-                    currentIt->distance, currentIt->estimate);
             nodeRanks.pop();
             if (currentIt->estimate == HUGE_VAL) continue;
             // The priority_queue might contain duplicates, and the later
             // ones might have already been evaluated.
-            fprintf(stderr,
-                    "Investigating new node {%s,%s} from priority_queue with distance = %.5f and "
-                    "actual estimate = %.5f\n",
-                    currentCoord.latitudeText.c_str(), currentCoord.longitudeText.c_str(), currentIt->distance,
-                    currentIt->estimate);
 
             if (isGeoCoordOnSegment(currentCoord, endStreetSegment))
                 // Found it. Success.

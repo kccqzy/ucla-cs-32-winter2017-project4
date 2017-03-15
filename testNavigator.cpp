@@ -17,13 +17,13 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
         for (auto const& navseg : directions) {
             switch (navseg.m_command) {
             case NavSegment::PROCEED:
-                fprintf(stderr, "Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n",
-                        navseg.m_direction.c_str(), navseg.m_distance, navseg.m_streetName.c_str(),
-                        navseg.m_geoSegment.start.latitudeText.c_str(), navseg.m_geoSegment.start.longitudeText.c_str(),
-                        navseg.m_geoSegment.end.latitudeText.c_str(), navseg.m_geoSegment.end.longitudeText.c_str());
+                printf("Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n", navseg.m_direction.c_str(),
+                       navseg.m_distance, navseg.m_streetName.c_str(), navseg.m_geoSegment.start.latitudeText.c_str(),
+                       navseg.m_geoSegment.start.longitudeText.c_str(), navseg.m_geoSegment.end.latitudeText.c_str(),
+                       navseg.m_geoSegment.end.longitudeText.c_str());
                 break;
             case NavSegment::TURN:
-                fprintf(stderr, "Turn %s onto %s\n", navseg.m_direction.c_str(), navseg.m_streetName.c_str());
+                printf("Turn %s onto %s\n", navseg.m_direction.c_str(), navseg.m_streetName.c_str());
                 break;
             }
         }
@@ -35,7 +35,6 @@ int main() {
     bool r = nav.loadMapData("mapdata.txt");
     assert(r);
     testNav(nav, "1061 Broxton Avenue", "Headlines!");
-#if 0
     std::vector<std::string> allAttractions{"Brentwood Country Mart",
                                             "Robertson Playground",
                                             "Thalians Mental Health Center",
@@ -688,5 +687,4 @@ int main() {
                                             "Saint Sebastian School"};
     for (size_t i = 0; i < allAttractions.size(); ++i)
         for (size_t j = i + 1; j < allAttractions.size(); ++j) testNav(nav, allAttractions[i], allAttractions[j]);
-#endif
 }
