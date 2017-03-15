@@ -87,8 +87,7 @@ private:
                     std::vector<NavSegment>& directions) {
         directions.clear();
         StreetName previousStreetName = endStreetSegment.streetName;
-        GeoCoord previous = endCoord;
-        while (!isGeoCoordOnSegment(previous, startStreetSegment)) {
+        for (GeoCoord previous = endCoord; !isGeoCoordOnSegment(previous, startStreetSegment);) {
             auto i = discoveredNodes.find(here);
             assert(i);
             auto thisStreetName = i->streetName;
