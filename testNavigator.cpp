@@ -14,16 +14,17 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
     if (nr != NAV_SUCCESS)
         printf("***** No route from %s to %s.\n", begin.c_str(), end.c_str());
     else {
+        printf("***** Shortest route from %s to %s has %zu steps:\n", begin.c_str(), end.c_str(), directions.size());
         for (auto const& navseg : directions) {
             switch (navseg.m_command) {
             case NavSegment::PROCEED:
-                printf("Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n", navseg.m_direction.c_str(),
+                printf("  Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n", navseg.m_direction.c_str(),
                        navseg.m_distance, navseg.m_streetName.c_str(), navseg.m_geoSegment.start.latitudeText.c_str(),
                        navseg.m_geoSegment.start.longitudeText.c_str(), navseg.m_geoSegment.end.latitudeText.c_str(),
                        navseg.m_geoSegment.end.longitudeText.c_str());
                 break;
             case NavSegment::TURN:
-                printf("Turn %s onto %s\n", navseg.m_direction.c_str(), navseg.m_streetName.c_str());
+                printf("  Turn %s onto %s\n", navseg.m_direction.c_str(), navseg.m_streetName.c_str());
                 break;
             }
         }
@@ -34,7 +35,6 @@ int main() {
     Navigator nav;
     bool r = nav.loadMapData("mapdata.txt");
     assert(r);
-    testNav(nav, "1061 Broxton Avenue", "Headlines!");
     std::vector<std::string> allAttractions{"Brentwood Country Mart",
                                             "Robertson Playground",
                                             "Thalians Mental Health Center",
