@@ -42,12 +42,14 @@ private:
         return rv;
     }
 
+    typedef std::shared_ptr<StreetName const> StreetNameRef;
     struct DiscoveredNode {
         GeoCoord parent;
-        StreetName streetName;
+        StreetNameRef streetName;
         double distance;
         double estimate;
-        DiscoveredNode(GeoCoord const& parent, double distance, double estimate, StreetName const& streetName)
+        DiscoveredNode(GeoCoord const& parent, double distance, double estimate,
+                       StreetNameRef const& streetName)
           : parent(parent), streetName(streetName), distance(distance), estimate(estimate) {}
     };
     typedef MyMap<GeoCoord, DiscoveredNode> NodeMap;
@@ -92,13 +94,14 @@ private:
                     StreetSegment const& endStreetSegment, GeoCoord here, NodeMap const& discoveredNodes,
                     std::vector<NavSegment>& directions) {
         directions.clear();
-        StreetName previousStreetName = endStreetSegment.streetName;
+        StreetNameRef previousStreetName =
+          std::make_shared<StreetName>(endStreetSegment.streetName);
         for (GeoCoord previous = endCoord; !isGeoCoordOnSegment(previous, startStreetSegment);) {
             auto i = discoveredNodes.find(here);
             assert(i);
             auto thisStreetName = i->streetName;
-            directions.emplace_back(makeProceedSegment(here, previous, previousStreetName));
-            if (thisStreetName != previousStreetName) directions.emplace_back(std::string{}, previousStreetName);
+            directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
+            if (*thisStreetName != *previousStreetName) directions.emplace_back(std::string{}, *previousStreetName);
             previousStreetName = std::move(thisStreetName);
             GeoCoord previous2 = std::move(previous);
             previous = std::move(here);
@@ -142,7 +145,8 @@ private:
                                    StreetName const& streetName, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
         double distance = distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
-        discoveredNodes.associate(routeBegin, DiscoveredNode(routeBegin, distance, estimate, streetName));
+        discoveredNodes.associate(
+          routeBegin, DiscoveredNode(routeBegin, distance, estimate, std::make_shared<StreetName>(streetName)));
         nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
     }
 
@@ -190,7 +194,8 @@ public:
 
             // Use this as a marker for completion of evaluation of a node.
             currentIt->estimate = HUGE_VAL;
-            for (auto const& neighbor : *getNeighbors(currentCoord)) {
+            auto neighbors = getNeighbors(currentCoord);
+            for (auto const& neighbor : *neighbors) {
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, neighbor.first);
                 assert(distance > 0);
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);
@@ -199,11 +204,13 @@ public:
                     if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
                     // Inserting duplicate. Statistics have shown that in
                     // practice only 8% of inserts are duplicates.
-                    *it = DiscoveredNode(currentCoord, distance, estimate, neighbor.second);
+                    *it = DiscoveredNode(currentCoord, distance, estimate,
+                                         StreetNameRef(neighbors, &neighbor.second));
                     nodeRanks.emplace(estimate, it, neighbor.first);
                 } else {
-                    discoveredNodes.associate(neighbor.first,
-                                              DiscoveredNode(currentCoord, distance, estimate, neighbor.second));
+                    discoveredNodes.associate(
+                      neighbor.first, DiscoveredNode(currentCoord, distance, estimate,
+                                                     StreetNameRef(neighbors, &neighbor.second)));
                     nodeRanks.emplace(estimate, discoveredNodes.find(neighbor.first), neighbor.first);
                 }
             }
