@@ -5,32 +5,49 @@
 #include <cassert>
 #include <cstdio>
 
+double print_directions(std::vector<NavSegment> const& directions) {
+    double totalMiles = 0.0;
+    for (auto const& navseg : directions) {
+        switch (navseg.m_command) {
+        case NavSegment::PROCEED:
+            totalMiles += navseg.m_distance;
+            printf("  Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n", navseg.m_direction.c_str(),
+                   navseg.m_distance, navseg.m_streetName.c_str(), navseg.m_geoSegment.start.latitudeText.c_str(),
+                   navseg.m_geoSegment.start.longitudeText.c_str(), navseg.m_geoSegment.end.latitudeText.c_str(),
+                   navseg.m_geoSegment.end.longitudeText.c_str());
+            break;
+        case NavSegment::TURN:
+            printf("  Turn %s onto %s\n", navseg.m_direction.c_str(), navseg.m_streetName.c_str());
+            break;
+        }
+    }
+    printf("  Total travel distance: %.6g miles\n", totalMiles);
+    return totalMiles;
+}
+
 void testNav(Navigator const& nav, std::string const& begin, std::string const& end) {
     std::vector<NavSegment> directions;
     fprintf(stderr, "Navigating from %s to %s: \n", begin.c_str(), end.c_str());
     NavResult nr = nav.navigate(begin, end, directions);
     fprintf(stderr, "Navigation result = %d\n", nr);
     assert(nr != NAV_BAD_SOURCE && nr != NAV_BAD_DESTINATION);
-    if (nr != NAV_SUCCESS)
+    if (nr != NAV_SUCCESS) {
         printf("***** No route from %s to %s.\n", begin.c_str(), end.c_str());
+        assert(directions.empty());
+        NavResult nrr = nav.navigate(end, begin, directions);
+        assert(nrr == NAV_NO_ROUTE);
+        assert(directions.empty());
+    }
     else {
-        double totalMiles = 0.0;
+        assert(!directions.empty());
         printf("***** Shortest route from %s to %s has %zu steps:\n", begin.c_str(), end.c_str(), directions.size());
-        for (auto const& navseg : directions) {
-            switch (navseg.m_command) {
-            case NavSegment::PROCEED:
-                totalMiles += navseg.m_distance;
-                printf("  Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n", navseg.m_direction.c_str(),
-                       navseg.m_distance, navseg.m_streetName.c_str(), navseg.m_geoSegment.start.latitudeText.c_str(),
-                       navseg.m_geoSegment.start.longitudeText.c_str(), navseg.m_geoSegment.end.latitudeText.c_str(),
-                       navseg.m_geoSegment.end.longitudeText.c_str());
-                break;
-            case NavSegment::TURN:
-                printf("  Turn %s onto %s\n", navseg.m_direction.c_str(), navseg.m_streetName.c_str());
-                break;
-            }
-        }
-        printf("  Total travel distance: %.6g miles\n", totalMiles);
+        print_directions(directions);
+        std::vector<NavSegment> reverse_directions;
+        NavResult nrr = nav.navigate(end, begin, reverse_directions);
+        assert(nrr == NAV_SUCCESS);
+        printf("***** Shortest route from %s to %s has %zu steps:\n", end.c_str(), begin.c_str(), reverse_directions.size());
+        print_directions(reverse_directions);
+        assert(reverse_directions.size() == directions.size());
     }
 }
 
@@ -72,7 +89,6 @@ int main() {
                                             "1061 Broxton Avenue",
                                             "Ami Sushi",
                                             "Barney's Beanery",
-#if 1
                                             "Five Guys",
                                             "Regent",
                                             "1067 Broxton Avenue",
@@ -688,8 +704,10 @@ int main() {
                                             "UCLA Wilshire Center",
                                             "10960 Wilshire Boulevard",
                                             "10980 Wilshire Boulevard",
-#endif
                                             "Saint Sebastian School"};
+
+    testNav(nav, "Brentwood Country Mart", "Math Sciences");
+
     for (size_t i = 0; i < allAttractions.size(); ++i)
         for (size_t j = i + 1; j < allAttractions.size(); ++j) testNav(nav, allAttractions[i], allAttractions[j]);
 }
