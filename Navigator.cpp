@@ -157,7 +157,7 @@ private:
 
     static void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
                                    StreetName const& streetName, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
-        double distance = distanceEarthKM(startCoord, routeBegin);
+        double distance = startCoord == routeBegin ? 0.0 : distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
         discoveredNodes.associate(
           routeBegin, DiscoveredNode(routeBegin, distance, estimate, std::make_shared<StreetName const>(streetName)));
@@ -210,10 +210,10 @@ public:
             currentIt->estimate = HUGE_VAL;
             auto neighbors = getNeighbors(currentCoord);
             for (auto const& neighbor : *neighbors) {
-                double distance = currentIt->distance + distanceEarthKM(currentCoord, neighbor.first);
-                assert(distance >= 0);
+                double distance =
+                  currentIt->distance +
+                  (currentCoord == neighbor.first ? 0.0 : distanceEarthKM(currentCoord, neighbor.first));
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);
-                assert(estimate >= 0);
                 GeoCoordRef neighborCoord(GeoCoordRefRaw(neighbors, &neighbor.first));
                 if (auto it = discoveredNodes.find(neighborCoord)) {
                     if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
