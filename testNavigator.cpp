@@ -14,10 +14,12 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
     if (nr != NAV_SUCCESS)
         printf("***** No route from %s to %s.\n", begin.c_str(), end.c_str());
     else {
+        double totalMiles = 0.0;
         printf("***** Shortest route from %s to %s has %zu steps:\n", begin.c_str(), end.c_str(), directions.size());
         for (auto const& navseg : directions) {
             switch (navseg.m_command) {
             case NavSegment::PROCEED:
+                totalMiles += navseg.m_distance;
                 printf("  Proceed %s for %.6g miles along %s: from (%s,%s) to (%s,%s)\n", navseg.m_direction.c_str(),
                        navseg.m_distance, navseg.m_streetName.c_str(), navseg.m_geoSegment.start.latitudeText.c_str(),
                        navseg.m_geoSegment.start.longitudeText.c_str(), navseg.m_geoSegment.end.latitudeText.c_str(),
@@ -28,6 +30,7 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
                 break;
             }
         }
+        printf("  Total travel distance: %.6g miles\n", totalMiles);
     }
 }
 
