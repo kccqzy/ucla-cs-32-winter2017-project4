@@ -160,11 +160,10 @@ private:
     }
 
     static void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
-                                   StreetName const& streetName, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
+                                   StreetNameRef const& streetName, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
         double distance = startCoord == routeBegin ? 0.0 : distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
-        discoveredNodes.associate(
-          routeBegin, DiscoveredNode(routeBegin, distance, estimate, std::make_shared<StreetName const>(streetName)));
+        discoveredNodes.associate(routeBegin, DiscoveredNode(routeBegin, distance, estimate, streetName));
         nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
     }
 
@@ -198,9 +197,9 @@ public:
         NodeMap discoveredNodes;
         NodeRanks nodeRanks;
         insertInitialNodes(startCoord, endCoord, GeoCoordRefRaw(startInfo, &startStreetSegment.segment.start),
-                           startStreetSegment.streetName, discoveredNodes, nodeRanks);
+                           StreetNameRef(startInfo, &startStreetSegment.streetName), discoveredNodes, nodeRanks);
         insertInitialNodes(startCoord, endCoord, GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
-                           startStreetSegment.streetName, discoveredNodes, nodeRanks);
+                           StreetNameRef(startInfo, &startStreetSegment.streetName), discoveredNodes, nodeRanks);
 
         while (!nodeRanks.empty()) {
             auto currentIt = nodeRanks.top().it;
