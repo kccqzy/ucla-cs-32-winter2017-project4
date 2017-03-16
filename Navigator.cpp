@@ -115,36 +115,7 @@ private:
             StreetNameRef thisStreetName = StreetNameRef(i->street, &i->street->streetName);
             assert(!(here == previous));
             directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
-            if (*thisStreetName != *previousStreetName) {
-                if (previous == endInfo->first)
-                    // clang-format off
-                fprintf(stderr,
-                        "DEBUG: replacing street name or issuing a TURN NavSegment here?\n"
-                        "       end  = {%s,%s} (on street segment %s {{%s,%s},{%s,%s}});\n"
-                        "       here = {%s,%s} (on street segment %s {{%s,%s},{%s,%s}}).\n",
-                        endInfo->first.latitudeText.c_str(),
-                        endInfo->first.longitudeText.c_str(),
-                        endInfo->second.streetName.c_str(),
-                        endInfo->second.segment.start.latitudeText.c_str(),
-                        endInfo->second.segment.start.longitudeText.c_str(),
-                        endInfo->second.segment.end.latitudeText.c_str(),
-                        endInfo->second.segment.end.longitudeText.c_str(),
-                        here.ref->latitudeText.c_str(),
-                        here.ref->longitudeText.c_str(),
-                        thisStreetName->c_str(),
-                        i->street->segment.start.latitudeText.c_str(),
-                        i->street->segment.start.longitudeText.c_str(),
-                        i->street->segment.end.latitudeText.c_str(),
-                        i->street->segment.end.longitudeText.c_str()
-                    );
-                // clang-format on
-                if (previous == endInfo->first && isGeoCoordOnSegment(previous, endInfo->second) &&
-                    isGeoCoordOnSegment(previous, *i->street)) {
-                    fprintf(stderr, "DEBUG: Replace!\n");
-                    directions.back().m_streetName = *thisStreetName;
-                } else
-                    directions.emplace_back(std::string{}, *previousStreetName);
-            }
+            if (*thisStreetName != *previousStreetName) directions.emplace_back(std::string{}, *previousStreetName);
             previousStreetName = std::move(thisStreetName);
             GeoCoordRef previous2 = std::move(previous);
             previous = std::move(here);
