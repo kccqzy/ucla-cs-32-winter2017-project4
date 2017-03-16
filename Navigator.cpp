@@ -21,6 +21,8 @@ private:
     SegmentMapper segmentMapper;
     AttractionMapper attractionMapper;
 
+    // We save all of a point's neighbors into our own map. It uses a shared_ptr so subsequent lookups do not invoke
+    // copy constructors. Subparts of this vector will also share the same memory.
     typedef std::string StreetName;
     typedef std::shared_ptr<const std::vector<std::pair<GeoCoord, StreetName>>> Neighbors;
     MyMap<GeoCoord, Neighbors> neighborMap;
@@ -43,6 +45,7 @@ private:
         return rvp;
     }
 
+    // StreetNameRef and GeoCoordRef are basically shared (ref-counted) pointers.
     typedef std::shared_ptr<StreetName const> StreetNameRef;
     typedef std::shared_ptr<GeoCoord const> GeoCoordRefRaw;
     struct GeoCoordRef {
@@ -51,6 +54,7 @@ private:
         operator GeoCoord const&() const { return *ref; }
         friend bool operator<(GeoCoordRef const& a, GeoCoordRef const& b) { return *a.ref < *b.ref; }
     };
+
     struct DiscoveredNode {
         GeoCoordRef parent;
         StreetNameRef streetName;
@@ -139,12 +143,12 @@ private:
         if (!attractionMapper.getGeoCoord(attr, gc)) return false;
         auto segments = segmentMapper.getSegments(gc);
         assert(!segments.empty());
-        // There might legitimately be multiple street segments here due to a
-        // coordinate might be both the beginning or end of a street segment as
-        // well as an attraction.
         if (segments.size() == 1)
             ss = segments.front();
         else {
+            // There might legitimately be multiple street segments here due to a coordinate might be both the
+            // beginning or end of a street segment as well as an attraction. We *always* find the street segment that
+            // the attraction belongs to.
             auto p = std::find_if(segments.cbegin(), segments.cend(), [&attr](StreetSegment const& thisStreet) {
                 return std::any_of(thisStreet.attractions.cbegin(), thisStreet.attractions.cend(),
                                    [&attr](Attraction const& thisAttr) { return thisAttr.name == attr; });
@@ -179,12 +183,18 @@ public:
         if (!getInfoFromAttrName(start, startCoord, startStreetSegment)) return NAV_BAD_SOURCE;
         if (!getInfoFromAttrName(end, endCoord, endStreetSegment)) return NAV_BAD_DESTINATION;
 
+        // Trivial route.
+        if (start == end) {
+            directions.clear();
+            return NAV_SUCCESS;
+        }
+
+        // Handle case where start and end attractions are on the same segment. No A* needed.
         if (startStreetSegment.segment.start.latitude == endStreetSegment.segment.start.latitude &&
             startStreetSegment.segment.start.longitude == endStreetSegment.segment.start.longitude &&
             startStreetSegment.segment.end.latitude == endStreetSegment.segment.end.latitude &&
             startStreetSegment.segment.end.longitude == endStreetSegment.segment.end.longitude)
             return reconstructDirectPath(startCoord, endCoord, startStreetSegment, directions);
-
 
         NodeMap discoveredNodes;
         NodeRanks nodeRanks;
@@ -198,8 +208,8 @@ public:
             auto currentCoord = nodeRanks.top().coord;
             nodeRanks.pop();
             if (currentIt->estimate == HUGE_VAL) continue;
-            // The priority_queue might contain duplicates, and the later
-            // ones might have already been evaluated.
+            // The priority_queue might contain duplicates, and the later ones might have already been evaluated. So
+            // skip them.
 
             if (isGeoCoordOnSegment(currentCoord, endStreetSegment))
                 // Found it. Success.
@@ -217,8 +227,7 @@ public:
                 GeoCoordRef neighborCoord(GeoCoordRefRaw(neighbors, &neighbor.first));
                 if (auto it = discoveredNodes.find(neighborCoord)) {
                     if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
-                    // Inserting duplicate. Statistics have shown that in
-                    // practice only 8% of inserts are duplicates.
+                    // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
                     *it = DiscoveredNode(currentCoord, distance, estimate, StreetNameRef(neighbors, &neighbor.second));
                     nodeRanks.emplace(estimate, it, neighborCoord);
                 } else {
