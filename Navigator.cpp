@@ -24,18 +24,18 @@ private:
     // We save all of a point's neighbors into our own map. It uses a shared_ptr so subsequent lookups do not invoke
     // copy constructors. Subparts of this vector will also share the same memory.
     typedef std::string StreetName;
-    typedef std::shared_ptr<const std::vector<std::pair<GeoCoord, StreetName>>> Neighbors;
+    typedef std::shared_ptr<const std::vector<std::pair<GeoCoord, StreetSegment>>> Neighbors;
     MyMap<GeoCoord, Neighbors> neighborMap;
     Neighbors getNeighbors(GeoCoord const& gc) {
         if (Neighbors* neighbors = neighborMap.find(gc)) return *neighbors;
-        std::vector<std::pair<GeoCoord, StreetName>> rv;
+        std::vector<std::pair<GeoCoord, StreetSegment>> rv;
         auto segments = segmentMapper.getSegments(gc);
         rv.reserve(segments.size());
         for (auto const& seg : segments) {
             if (gc == seg.segment.start)
-                rv.emplace_back(seg.segment.end, seg.streetName);
+                rv.emplace_back(seg.segment.end, seg);
             else if (gc == seg.segment.end)
-                rv.emplace_back(seg.segment.start, seg.streetName);
+                rv.emplace_back(seg.segment.start, seg);
             // A coordinate can be both the beginning or end of a street segment
             // as well as an attraction.
         }
@@ -47,6 +47,7 @@ private:
 
     // StreetNameRef and GeoCoordRef are basically shared (ref-counted) pointers.
     typedef std::shared_ptr<StreetName const> StreetNameRef;
+    typedef std::shared_ptr<StreetSegment const> StreetSegmentRef;
     typedef std::shared_ptr<GeoCoord const> GeoCoordRefRaw;
     struct GeoCoordRef {
         GeoCoordRefRaw ref;
@@ -57,11 +58,14 @@ private:
 
     struct DiscoveredNode {
         GeoCoordRef parent;
-        StreetNameRef streetName;
+        StreetSegmentRef street;
+        // This street refers to the street used to reach the current node. Street is a property of the segment;
+        // therefore it is meaningless if the node is the start/end attraction and it has the same coordinate as the
+        // beginning/end of multiple street segments.
         double distance;
         double estimate;
-        DiscoveredNode(GeoCoordRef const& parent, double distance, double estimate, StreetNameRef const& streetName)
-          : parent(parent), streetName(streetName), distance(distance), estimate(estimate) {}
+        DiscoveredNode(GeoCoordRef const& parent, double distance, double estimate, StreetSegmentRef const& street)
+          : parent(parent), street(street), distance(distance), estimate(estimate) {}
     };
     typedef MyMap<GeoCoordRef, DiscoveredNode> NodeMap;
     struct RankedNode {
@@ -100,33 +104,61 @@ private:
         return {describeDirection(angleOfLine(gs)), streetName, distanceEarthMiles(from, to), gs};
     }
 
-    static NavResult
-    reconstructPath(GeoCoord const& startCoord, GeoCoord const& endCoord, StreetSegment const& startStreetSegment,
-                    StreetSegment const& endStreetSegment, GeoCoordRef here, NodeMap const& discoveredNodes,
-                    std::vector<NavSegment>& directions) {
+    typedef std::shared_ptr<std::pair<GeoCoord, StreetSegment>> CoordSegRef;
+    static NavResult reconstructPath(CoordSegRef const& startInfo, CoordSegRef const& endInfo, GeoCoordRef here,
+                                     StreetNameRef previousStreetName, NodeMap const& discoveredNodes,
+                                     std::vector<NavSegment>& directions) {
         directions.clear();
-        StreetNameRef previousStreetName = std::make_shared<StreetName const>(endStreetSegment.streetName);
-        for (GeoCoordRef previous = std::make_shared<GeoCoord const>(endCoord);
-             !isGeoCoordOnSegment(previous, startStreetSegment);) {
+        for (GeoCoordRef previous = GeoCoordRefRaw(endInfo, &endInfo->first);;) {
             auto i = discoveredNodes.find(here);
             assert(i);
-            auto thisStreetName = i->streetName;
-            if (!(here == previous)) {
-                directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
-                if (*thisStreetName != *previousStreetName) directions.emplace_back(std::string{}, *previousStreetName);
+            StreetNameRef thisStreetName = StreetNameRef(i->street, &i->street->streetName);
+            assert(!(here == previous));
+            directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
+            if (*thisStreetName != *previousStreetName) {
+                if (previous == endInfo->first)
+                    // clang-format off
+                fprintf(stderr,
+                        "DEBUG: replacing street name or issuing a TURN NavSegment here?\n"
+                        "       end  = {%s,%s} (on street segment %s {{%s,%s},{%s,%s}});\n"
+                        "       here = {%s,%s} (on street segment %s {{%s,%s},{%s,%s}}).\n",
+                        endInfo->first.latitudeText.c_str(),
+                        endInfo->first.longitudeText.c_str(),
+                        endInfo->second.streetName.c_str(),
+                        endInfo->second.segment.start.latitudeText.c_str(),
+                        endInfo->second.segment.start.longitudeText.c_str(),
+                        endInfo->second.segment.end.latitudeText.c_str(),
+                        endInfo->second.segment.end.longitudeText.c_str(),
+                        here.ref->latitudeText.c_str(),
+                        here.ref->longitudeText.c_str(),
+                        thisStreetName->c_str(),
+                        i->street->segment.start.latitudeText.c_str(),
+                        i->street->segment.start.longitudeText.c_str(),
+                        i->street->segment.end.latitudeText.c_str(),
+                        i->street->segment.end.longitudeText.c_str()
+                    );
+                // clang-format on
+                if (previous == endInfo->first && isGeoCoordOnSegment(previous, endInfo->second) &&
+                    isGeoCoordOnSegment(previous, *i->street)) {
+                    fprintf(stderr, "DEBUG: Replace!\n");
+                    directions.back().m_streetName = *thisStreetName;
+                } else
+                    directions.emplace_back(std::string{}, *previousStreetName);
             }
             previousStreetName = std::move(thisStreetName);
             GeoCoordRef previous2 = std::move(previous);
             previous = std::move(here);
             here = i->parent;
-            if (!directions.empty() && directions.back().m_command == NavSegment::TURN)
+            if (directions.back().m_command == NavSegment::TURN)
                 directions.back().m_direction = describeTurn(here, previous, previous2);
+            if (here == startInfo->first) {
+                if (!(here == previous))
+                    directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
+                break;
+            }
         }
 
-        if (!(startCoord == here))
-            directions.emplace_back(makeProceedSegment(startCoord, here, startStreetSegment.streetName));
-        else if (directions.back().m_command == NavSegment::TURN)
-            directions.pop_back();
+        if (directions.back().m_command == NavSegment::TURN) directions.pop_back();
         std::reverse(directions.begin(), directions.end());
 
         return NAV_SUCCESS;
@@ -139,7 +171,7 @@ private:
         return NAV_SUCCESS;
     }
 
-    std::shared_ptr<std::pair<GeoCoord, StreetSegment>> getInfoFromAttrName(std::string const& attr) const {
+    CoordSegRef getInfoFromAttrName(std::string const& attr) const {
         auto rv = std::make_shared<std::pair<GeoCoord, StreetSegment>>();
         if (!attractionMapper.getGeoCoord(attr, rv->first)) return {};
         auto segments = segmentMapper.getSegments(rv->first);
@@ -159,11 +191,12 @@ private:
         return rv;
     }
 
-    static void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
-                                   StreetNameRef const& streetName, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
+    static void
+    insertInitialNodes(GeoCoordRef const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
+                       StreetSegmentRef const& street, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
         double distance = startCoord == routeBegin ? 0.0 : distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
-        discoveredNodes.associate(routeBegin, DiscoveredNode(routeBegin, distance, estimate, streetName));
+        discoveredNodes.associate(routeBegin, DiscoveredNode(startCoord, distance, estimate, street));
         nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
     }
 
@@ -196,10 +229,12 @@ public:
 
         NodeMap discoveredNodes;
         NodeRanks nodeRanks;
-        insertInitialNodes(startCoord, endCoord, GeoCoordRefRaw(startInfo, &startStreetSegment.segment.start),
-                           StreetNameRef(startInfo, &startStreetSegment.streetName), discoveredNodes, nodeRanks);
-        insertInitialNodes(startCoord, endCoord, GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
-                           StreetNameRef(startInfo, &startStreetSegment.streetName), discoveredNodes, nodeRanks);
+        insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
+                           GeoCoordRefRaw(startInfo, &startStreetSegment.segment.start),
+                           StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
+        insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
+                           GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
+                           StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
 
         while (!nodeRanks.empty()) {
             auto currentIt = nodeRanks.top().it;
@@ -211,20 +246,19 @@ public:
             // skip them. We use HUGE_VAL as a marker for completion of evaluation of a node.
 
             if (currentCoord == endCoord)
-                return reconstructPath(startCoord, endCoord, startStreetSegment, endStreetSegment,
-                                       currentCoord, // TODO remove this argument
+                return reconstructPath(startInfo, endInfo, currentIt->parent,
+                                       StreetNameRef(currentIt->street, &currentIt->street->streetName),
                                        discoveredNodes, directions);
 
             auto insertOrUpdate = [&](GeoCoordRef const& neighborCoord, double distance, double estimate,
-                                      StreetNameRef const& streetName) {
+                                      StreetSegmentRef const& street) {
                 if (auto it = discoveredNodes.find(neighborCoord)) {
                     if (it->estimate == HUGE_VAL || distance >= it->distance) return;
                     // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
-                    *it = DiscoveredNode(currentCoord, distance, estimate, streetName);
+                    *it = DiscoveredNode(currentCoord, distance, estimate, street);
                     nodeRanks.emplace(estimate, it, neighborCoord);
                 } else {
-                    discoveredNodes.associate(neighborCoord,
-                                              DiscoveredNode(currentCoord, distance, estimate, streetName));
+                    discoveredNodes.associate(neighborCoord, DiscoveredNode(currentCoord, distance, estimate, street));
                     nodeRanks.emplace(estimate, discoveredNodes.find(neighborCoord), neighborCoord);
                 }
             };
@@ -233,7 +267,7 @@ public:
                 // Found it. For this, we need to consider an additional node, the end attraction itself.
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, endCoord);
                 GeoCoordRef theEnd(GeoCoordRefRaw(endInfo, &endCoord));
-                insertOrUpdate(theEnd, distance, distance, StreetNameRef(endInfo, &endStreetSegment.streetName));
+                insertOrUpdate(theEnd, distance, distance, StreetSegmentRef(endInfo, &endStreetSegment));
             }
 
             auto neighbors = getNeighbors(currentCoord);
@@ -243,7 +277,7 @@ public:
                   (currentCoord == neighbor.first ? 0.0 : distanceEarthKM(currentCoord, neighbor.first));
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);
                 GeoCoordRef neighborCoord(GeoCoordRefRaw(neighbors, &neighbor.first));
-                insertOrUpdate(neighborCoord, distance, estimate, StreetNameRef(neighbors, &neighbor.second));
+                insertOrUpdate(neighborCoord, distance, estimate, StreetSegmentRef(neighbors, &neighbor.second));
             }
         }
         return NAV_NO_ROUTE;

@@ -37,16 +37,17 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
         NavResult nrr = nav.navigate(end, begin, directions);
         assert(nrr == NAV_NO_ROUTE);
         assert(directions.empty());
-    }
-    else {
+    } else {
         assert(!directions.empty());
         printf("***** Shortest route from %s to %s has %zu steps:\n", begin.c_str(), end.c_str(), directions.size());
-        print_directions(directions);
+        double d1 = print_directions(directions);
         std::vector<NavSegment> reverse_directions;
         NavResult nrr = nav.navigate(end, begin, reverse_directions);
         assert(nrr == NAV_SUCCESS);
-        printf("***** Shortest route from %s to %s has %zu steps:\n", end.c_str(), begin.c_str(), reverse_directions.size());
-        print_directions(reverse_directions);
+        printf("***** Shortest route from %s to %s has %zu steps:\n", end.c_str(), begin.c_str(),
+               reverse_directions.size());
+        double d2 = print_directions(reverse_directions);
+        assert(std::abs(d1 - d2) < 1e-6);
         assert(reverse_directions.size() == directions.size());
     }
 }
