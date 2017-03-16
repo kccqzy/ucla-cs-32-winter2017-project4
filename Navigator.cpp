@@ -208,16 +208,31 @@ public:
             auto currentCoord = nodeRanks.top().coord;
             nodeRanks.pop();
             if (currentIt->estimate == HUGE_VAL) continue;
-            // The priority_queue might contain duplicates, and the later ones might have already been evaluated. So
-            // skip them.
-
-            if (isGeoCoordOnSegment(currentCoord, endStreetSegment))
-                // Found it. Success.
-                return reconstructPath(startCoord, endCoord, startStreetSegment, endStreetSegment, currentCoord,
-                                       discoveredNodes, directions);
-
-            // Use this as a marker for completion of evaluation of a node.
             currentIt->estimate = HUGE_VAL;
+            // The priority_queue might contain duplicates, and the later ones might have already been evaluated. So
+            // skip them. We use HUGE_VAL as a marker for completion of evaluation of a node.
+
+            if (currentCoord == endCoord)
+                return reconstructPath(startCoord, endCoord, startStreetSegment, endStreetSegment,
+                                       currentCoord, // TODO remove this argument
+                                       discoveredNodes, directions);
+            if (isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
+                // Found it. For this, we need to consider an additional node, the end attraction itself.
+                double distance = currentIt->distance + distanceEarthKM(currentCoord, endCoord);
+                GeoCoordRef neighborCoord(std::make_shared<GeoCoord const>(endCoord));
+                if (auto it = discoveredNodes.find(neighborCoord)) {
+                    if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
+                    // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
+                    *it = DiscoveredNode(currentCoord, distance, distance, std::make_shared<StreetName const>(endStreetSegment.streetName));
+                    nodeRanks.emplace(distance, it, neighborCoord);
+                } else {
+                    discoveredNodes.associate(
+                        neighborCoord,
+                        DiscoveredNode(currentCoord, distance, distance, std::make_shared<StreetName const>(endStreetSegment.streetName)));
+                    nodeRanks.emplace(distance, discoveredNodes.find(neighborCoord), neighborCoord);
+                }
+            }
+
             auto neighbors = getNeighbors(currentCoord);
             for (auto const& neighbor : *neighbors) {
                 double distance =
