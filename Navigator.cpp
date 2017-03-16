@@ -22,24 +22,25 @@ private:
     AttractionMapper attractionMapper;
 
     typedef std::string StreetName;
-    typedef std::shared_ptr<std::vector<std::pair<GeoCoord, StreetName>>> Neighbors;
+    typedef std::shared_ptr<const std::vector<std::pair<GeoCoord, StreetName>>> Neighbors;
     MyMap<GeoCoord, Neighbors> neighborMap;
     Neighbors getNeighbors(GeoCoord const& gc) {
         if (Neighbors* neighbors = neighborMap.find(gc)) return *neighbors;
-        auto rv = std::make_shared<std::vector<std::pair<GeoCoord, StreetName>>>();
+        std::vector<std::pair<GeoCoord, StreetName>> rv;
         auto segments = segmentMapper.getSegments(gc);
-        rv->reserve(segments.size());
+        rv.reserve(segments.size());
         for (auto const& seg : segments) {
             if (gc == seg.segment.start)
-                rv->emplace_back(seg.segment.end, seg.streetName);
+                rv.emplace_back(seg.segment.end, seg.streetName);
             else if (gc == seg.segment.end)
-                rv->emplace_back(seg.segment.start, seg.streetName);
+                rv.emplace_back(seg.segment.start, seg.streetName);
             // A coordinate can be both the beginning or end of a street segment
             // as well as an attraction.
         }
-        assert(!rv->empty() && "getNeighbors: the provided coord is not the beginning or end of a street segment");
-        neighborMap.associate(gc, rv);
-        return rv;
+        assert(!rv.empty() && "getNeighbors: the provided coord is not the beginning or end of a street segment");
+        auto rvp = std::make_shared<const decltype(rv)>(std::move(rv));
+        neighborMap.associate(gc, rvp);
+        return rvp;
     }
 
     typedef std::shared_ptr<StreetName const> StreetNameRef;
@@ -100,7 +101,7 @@ private:
                     StreetSegment const& endStreetSegment, GeoCoordRef here, NodeMap const& discoveredNodes,
                     std::vector<NavSegment>& directions) {
         directions.clear();
-        StreetNameRef previousStreetName = std::make_shared<StreetName>(endStreetSegment.streetName);
+        StreetNameRef previousStreetName = std::make_shared<StreetName const>(endStreetSegment.streetName);
         for (GeoCoordRef previous = std::make_shared<GeoCoord const>(endCoord);
              !isGeoCoordOnSegment(previous, startStreetSegment);) {
             auto i = discoveredNodes.find(here);
@@ -152,7 +153,7 @@ private:
         double distance = distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
         discoveredNodes.associate(
-          routeBegin, DiscoveredNode(routeBegin, distance, estimate, std::make_shared<StreetName>(streetName)));
+          routeBegin, DiscoveredNode(routeBegin, distance, estimate, std::make_shared<StreetName const>(streetName)));
         nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
     }
 
