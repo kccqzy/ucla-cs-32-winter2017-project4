@@ -139,12 +139,12 @@ private:
         return NAV_SUCCESS;
     }
 
-    bool getInfoFromAttrName(std::string const& attr, GeoCoord& gc, StreetSegment& ss) const {
-        if (!attractionMapper.getGeoCoord(attr, gc)) return false;
-        auto segments = segmentMapper.getSegments(gc);
-        assert(!segments.empty());
+    std::shared_ptr<std::pair<GeoCoord, StreetSegment>> getInfoFromAttrName(std::string const& attr) const {
+        auto rv = std::make_shared<std::pair<GeoCoord, StreetSegment>>();
+        if (!attractionMapper.getGeoCoord(attr, rv->first)) return {};
+        auto segments = segmentMapper.getSegments(rv->first);
         if (segments.size() == 1)
-            ss = segments.front();
+            rv->second = segments.front();
         else {
             // There might legitimately be multiple street segments here due to a coordinate might be both the
             // beginning or end of a street segment as well as an attraction. We *always* find the street segment that
@@ -154,9 +154,9 @@ private:
                                    [&attr](Attraction const& thisAttr) { return thisAttr.name == attr; });
             });
             assert(p != segments.cend());
-            ss = *p;
+            rv->second = *p;
         }
-        return true;
+        return rv;
     }
 
     static void insertInitialNodes(GeoCoord const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
@@ -178,10 +178,11 @@ public:
     }
 
     NavResult navigate(std::string const& start, std::string const& end, std::vector<NavSegment>& directions) {
-        GeoCoord startCoord, endCoord;
-        StreetSegment startStreetSegment, endStreetSegment;
-        if (!getInfoFromAttrName(start, startCoord, startStreetSegment)) return NAV_BAD_SOURCE;
-        if (!getInfoFromAttrName(end, endCoord, endStreetSegment)) return NAV_BAD_DESTINATION;
+        auto startInfo = getInfoFromAttrName(start), endInfo = getInfoFromAttrName(end);
+        if (!startInfo) return NAV_BAD_SOURCE;
+        if (!endInfo) return NAV_BAD_DESTINATION;
+        GeoCoord const &startCoord = startInfo->first, &endCoord = endInfo->first;
+        StreetSegment const &startStreetSegment = startInfo->second, &endStreetSegment = endInfo->second;
 
         // Trivial route.
         if (start == end) {
@@ -198,9 +199,9 @@ public:
 
         NodeMap discoveredNodes;
         NodeRanks nodeRanks;
-        insertInitialNodes(startCoord, endCoord, std::make_shared<GeoCoord const>(startStreetSegment.segment.start),
+        insertInitialNodes(startCoord, endCoord, GeoCoordRefRaw(startInfo, &startStreetSegment.segment.start),
                            startStreetSegment.streetName, discoveredNodes, nodeRanks);
-        insertInitialNodes(startCoord, endCoord, std::make_shared<GeoCoord const>(startStreetSegment.segment.end),
+        insertInitialNodes(startCoord, endCoord, GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
                            startStreetSegment.streetName, discoveredNodes, nodeRanks);
 
         while (!nodeRanks.empty()) {
@@ -219,16 +220,17 @@ public:
             if (isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
                 // Found it. For this, we need to consider an additional node, the end attraction itself.
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, endCoord);
-                GeoCoordRef neighborCoord(std::make_shared<GeoCoord const>(endCoord));
+                GeoCoordRef neighborCoord(GeoCoordRefRaw(endInfo, &endCoord));
                 if (auto it = discoveredNodes.find(neighborCoord)) {
                     if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
                     // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
-                    *it = DiscoveredNode(currentCoord, distance, distance, std::make_shared<StreetName const>(endStreetSegment.streetName));
+                    *it = DiscoveredNode(currentCoord, distance, distance,
+                                         StreetNameRef(endInfo, &endStreetSegment.streetName));
                     nodeRanks.emplace(distance, it, neighborCoord);
                 } else {
-                    discoveredNodes.associate(
-                        neighborCoord,
-                        DiscoveredNode(currentCoord, distance, distance, std::make_shared<StreetName const>(endStreetSegment.streetName)));
+                    discoveredNodes.associate(neighborCoord,
+                                              DiscoveredNode(currentCoord, distance, distance,
+                                                             StreetNameRef(endInfo, &endStreetSegment.streetName)));
                     nodeRanks.emplace(distance, discoveredNodes.find(neighborCoord), neighborCoord);
                 }
             }
