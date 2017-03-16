@@ -706,7 +706,7 @@ int main() {
                                             "10980 Wilshire Boulevard",
                                             "Saint Sebastian School"};
 
-    // testNav(nav, "Brentwood Country Mart", "Math Sciences");
+    testNav(nav, "Brentwood Country Mart", "Math Sciences");
 
     for (size_t i = 0; i < allAttractions.size(); ++i)
         for (size_t j = i + 1; j < allAttractions.size(); ++j) testNav(nav, allAttractions[i], allAttractions[j]);

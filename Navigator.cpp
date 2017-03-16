@@ -217,22 +217,26 @@ public:
                 return reconstructPath(startCoord, endCoord, startStreetSegment, endStreetSegment,
                                        currentCoord, // TODO remove this argument
                                        discoveredNodes, directions);
+
+            auto insertOrUpdate = [&](GeoCoordRef const& neighborCoord, double distance, double estimate,
+                                      StreetNameRef const& streetName) {
+                if (auto it = discoveredNodes.find(neighborCoord)) {
+                    if (it->estimate == HUGE_VAL || distance >= it->distance) return;
+                    // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
+                    *it = DiscoveredNode(currentCoord, distance, estimate, streetName);
+                    nodeRanks.emplace(estimate, it, neighborCoord);
+                } else {
+                    discoveredNodes.associate(neighborCoord,
+                                              DiscoveredNode(currentCoord, distance, estimate, streetName));
+                    nodeRanks.emplace(estimate, discoveredNodes.find(neighborCoord), neighborCoord);
+                }
+            };
+
             if (isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
                 // Found it. For this, we need to consider an additional node, the end attraction itself.
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, endCoord);
-                GeoCoordRef neighborCoord(GeoCoordRefRaw(endInfo, &endCoord));
-                if (auto it = discoveredNodes.find(neighborCoord)) {
-                    if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
-                    // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
-                    *it = DiscoveredNode(currentCoord, distance, distance,
-                                         StreetNameRef(endInfo, &endStreetSegment.streetName));
-                    nodeRanks.emplace(distance, it, neighborCoord);
-                } else {
-                    discoveredNodes.associate(neighborCoord,
-                                              DiscoveredNode(currentCoord, distance, distance,
-                                                             StreetNameRef(endInfo, &endStreetSegment.streetName)));
-                    nodeRanks.emplace(distance, discoveredNodes.find(neighborCoord), neighborCoord);
-                }
+                GeoCoordRef theEnd(GeoCoordRefRaw(endInfo, &endCoord));
+                insertOrUpdate(theEnd, distance, distance, StreetNameRef(endInfo, &endStreetSegment.streetName));
             }
 
             auto neighbors = getNeighbors(currentCoord);
@@ -242,17 +246,7 @@ public:
                   (currentCoord == neighbor.first ? 0.0 : distanceEarthKM(currentCoord, neighbor.first));
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);
                 GeoCoordRef neighborCoord(GeoCoordRefRaw(neighbors, &neighbor.first));
-                if (auto it = discoveredNodes.find(neighborCoord)) {
-                    if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
-                    // Inserting duplicate. Statistics have shown that in practice only 8% of inserts are duplicates.
-                    *it = DiscoveredNode(currentCoord, distance, estimate, StreetNameRef(neighbors, &neighbor.second));
-                    nodeRanks.emplace(estimate, it, neighborCoord);
-                } else {
-                    discoveredNodes.associate(
-                      neighborCoord,
-                      DiscoveredNode(currentCoord, distance, estimate, StreetNameRef(neighbors, &neighbor.second)));
-                    nodeRanks.emplace(estimate, discoveredNodes.find(neighborCoord), neighborCoord);
-                }
+                insertOrUpdate(neighborCoord, distance, estimate, StreetNameRef(neighbors, &neighbor.second));
             }
         }
         return NAV_NO_ROUTE;
