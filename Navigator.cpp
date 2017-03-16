@@ -107,17 +107,24 @@ private:
             auto i = discoveredNodes.find(here);
             assert(i);
             auto thisStreetName = i->streetName;
-            directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
-            if (*thisStreetName != *previousStreetName) directions.emplace_back(std::string{}, *previousStreetName);
+            if (!(here == previous)) {
+                directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
+                if (*thisStreetName != *previousStreetName) directions.emplace_back(std::string{}, *previousStreetName);
+            }
             previousStreetName = std::move(thisStreetName);
             GeoCoordRef previous2 = std::move(previous);
             previous = std::move(here);
             here = i->parent;
-            if (directions.back().m_command == NavSegment::TURN)
+            if (!directions.empty() && directions.back().m_command == NavSegment::TURN)
                 directions.back().m_direction = describeTurn(here, previous, previous2);
         }
-        directions.emplace_back(makeProceedSegment(startCoord, here, startStreetSegment.streetName));
+
+        if (!(startCoord == here))
+            directions.emplace_back(makeProceedSegment(startCoord, here, startStreetSegment.streetName));
+        else if (directions.back().m_command == NavSegment::TURN)
+            directions.pop_back();
         std::reverse(directions.begin(), directions.end());
+
         return NAV_SUCCESS;
     }
 
@@ -204,9 +211,9 @@ public:
             auto neighbors = getNeighbors(currentCoord);
             for (auto const& neighbor : *neighbors) {
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, neighbor.first);
-                assert(distance > 0);
+                assert(distance >= 0);
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);
-                assert(estimate > 0);
+                assert(estimate >= 0);
                 GeoCoordRef neighborCoord(GeoCoordRefRaw(neighbors, &neighbor.first));
                 if (auto it = discoveredNodes.find(neighborCoord)) {
                     if (it->estimate == HUGE_VAL || distance >= it->distance) continue;
