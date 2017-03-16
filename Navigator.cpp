@@ -191,10 +191,8 @@ public:
         }
 
         // Handle case where start and end attractions are on the same segment. No A* needed.
-        if (startStreetSegment.segment.start.latitude == endStreetSegment.segment.start.latitude &&
-            startStreetSegment.segment.start.longitude == endStreetSegment.segment.start.longitude &&
-            startStreetSegment.segment.end.latitude == endStreetSegment.segment.end.latitude &&
-            startStreetSegment.segment.end.longitude == endStreetSegment.segment.end.longitude)
+        if (startStreetSegment.segment.start == endStreetSegment.segment.start &&
+            startStreetSegment.segment.end == endStreetSegment.segment.end)
             return reconstructDirectPath(startCoord, endCoord, startStreetSegment, directions);
 
         NodeMap discoveredNodes;
