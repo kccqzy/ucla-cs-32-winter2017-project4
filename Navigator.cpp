@@ -195,9 +195,12 @@ public:
         }
 
         // Handle case where start and end attractions are on the same segment. No A* needed.
-        // Probably wrong if they are in fact on the same segment but not marked as such.
         if (startStreetSegment.segment.start == endStreetSegment.segment.start &&
             startStreetSegment.segment.end == endStreetSegment.segment.end)
+            return reconstructDirectPath(startCoord, endCoord, startStreetSegment, directions);
+        if (isGeoCoordOnSegment(startCoord, endStreetSegment))
+            return reconstructDirectPath(startCoord, endCoord, endStreetSegment, directions);
+        if (isGeoCoordOnSegment(endCoord, startStreetSegment))
             return reconstructDirectPath(startCoord, endCoord, startStreetSegment, directions);
 
         NodeMap discoveredNodes;
