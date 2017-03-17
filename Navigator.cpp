@@ -145,7 +145,7 @@ private:
         else {
             // There might legitimately be multiple street segments here due to a coordinate might be both the
             // beginning or end of a street segment as well as an attraction. We *always* find the street segment that
-            // the attraction belongs to.
+            // the attraction belongs to, even though this isn't necessarily useful.
             auto p = std::find_if(segments.cbegin(), segments.cend(), [&attr](StreetSegment const& thisStreet) {
                 return std::any_of(thisStreet.attractions.cbegin(), thisStreet.attractions.cend(),
                                    [&attr](Attraction const& thisAttr) { return thisAttr.name == attr; });
@@ -215,6 +215,7 @@ public:
                                    StreetSegmentRef(segments, &segment), discoveredNodes, nodeRanks);
             }
         }
+        bool endCoordOnEndStreetSegment = isGeoCoordOnSegment(endCoord, endStreetSegment);
 
         while (!nodeRanks.empty()) {
             auto currentIt = nodeRanks.top().it;
@@ -243,7 +244,7 @@ public:
                 }
             };
 
-            if (isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
+            if (!endCoordOnEndStreetSegment && isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
                 // Found it. For this, we need to consider an additional node, the end attraction itself.
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, endCoord);
                 GeoCoordRef theEnd(GeoCoordRefRaw(endInfo, &endCoord));
