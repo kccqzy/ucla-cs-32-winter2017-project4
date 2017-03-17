@@ -47,8 +47,11 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
         printf("***** Shortest route from %s to %s has %zu steps:\n", end.c_str(), begin.c_str(),
                reverse_directions.size());
         double d2 = print_directions(reverse_directions);
-        assert(std::abs(d1 - d2) < 1e-6);
-        assert(reverse_directions.size() == directions.size());
+        if (!(std::abs(d1 - d2) < 1e-6 && reverse_directions.size() == directions.size()))
+            printf(
+              "***** Irregularity: forward and backward routes have different distances or number of steps: (%.6g,%zu) "
+              "!= (%.6g,%zu)\n",
+              d1, directions.size(), d2, reverse_directions.size());
     }
 }
 

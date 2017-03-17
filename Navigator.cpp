@@ -165,7 +165,8 @@ private:
     static void
     insertInitialNodes(GeoCoordRef const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
                        StreetSegmentRef const& street, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
-        double distance = startCoord == routeBegin ? 0.0 : distanceEarthKM(startCoord, routeBegin);
+        assert(!(startCoord == routeBegin));
+        double distance = distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
         discoveredNodes.associate(routeBegin, DiscoveredNode(startCoord, distance, estimate, street));
         nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
@@ -194,18 +195,29 @@ public:
         }
 
         // Handle case where start and end attractions are on the same segment. No A* needed.
+        // Probably wrong if they are in fact on the same segment but not marked as such.
         if (startStreetSegment.segment.start == endStreetSegment.segment.start &&
             startStreetSegment.segment.end == endStreetSegment.segment.end)
             return reconstructDirectPath(startCoord, endCoord, startStreetSegment, directions);
 
         NodeMap discoveredNodes;
         NodeRanks nodeRanks;
-        insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
-                           GeoCoordRefRaw(startInfo, &startStreetSegment.segment.start),
-                           StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
-        insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
-                           GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
-                           StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
+        if (!isGeoCoordOnSegment(startCoord, startStreetSegment)) {
+            insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
+                               GeoCoordRefRaw(startInfo, &startStreetSegment.segment.start),
+                               StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
+            insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
+                               GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
+                               StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
+        } else {
+            auto segments = std::make_shared<std::vector<StreetSegment>>(segmentMapper.getSegments(startCoord));
+            for (auto const& segment : *segments) {
+                GeoCoordRef routeBegin = GeoCoordRefRaw(
+                  segments, startCoord == segment.segment.start ? &segment.segment.end : &segment.segment.start);
+                insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord, routeBegin,
+                                   StreetSegmentRef(segments, &segment), discoveredNodes, nodeRanks);
+            }
+        }
 
         while (!nodeRanks.empty()) {
             auto currentIt = nodeRanks.top().it;
