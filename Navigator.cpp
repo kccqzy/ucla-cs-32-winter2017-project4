@@ -159,8 +159,7 @@ private:
     static void
     insertInitialNodes(GeoCoordRef const& startCoord, GeoCoord const& endCoord, GeoCoordRef const& routeBegin,
                        StreetSegmentRef const& street, NodeMap& discoveredNodes, NodeRanks& nodeRanks) {
-        assert(!(startCoord == routeBegin));
-        double distance = distanceEarthKM(startCoord, routeBegin);
+        double distance = startCoord == routeBegin ? 0.0 : distanceEarthKM(startCoord, routeBegin);
         double estimate = distance + distanceEarthKM(routeBegin, endCoord);
         discoveredNodes.associate(routeBegin, DiscoveredNode(startCoord, distance, estimate, street));
         nodeRanks.emplace(estimate, discoveredNodes.find(routeBegin), routeBegin);
@@ -197,6 +196,8 @@ public:
         if (isGeoCoordOnSegment(endCoord, startStreetSegment))
             return reconstructDirectPath(startCoord, endCoord, startStreetSegment, directions);
 
+        // Insert initial nodes. If the start attraction is not on the segment, push both ends of the segment;
+        // otherwise push itself.
         NodeMap discoveredNodes;
         NodeRanks nodeRanks;
         if (!isGeoCoordOnSegment(startCoord, startStreetSegment)) {
@@ -206,15 +207,9 @@ public:
             insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord,
                                GeoCoordRefRaw(startInfo, &startStreetSegment.segment.end),
                                StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
-        } else {
-            auto segments = std::make_shared<std::vector<StreetSegment>>(segmentMapper.getSegments(startCoord));
-            for (auto const& segment : *segments) {
-                GeoCoordRef routeBegin = GeoCoordRefRaw(
-                  segments, startCoord == segment.segment.start ? &segment.segment.end : &segment.segment.start);
-                insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord, routeBegin,
-                                   StreetSegmentRef(segments, &segment), discoveredNodes, nodeRanks);
-            }
-        }
+        } else
+            insertInitialNodes(GeoCoordRefRaw(startInfo, &startCoord), endCoord, GeoCoordRefRaw(startInfo, &startCoord),
+                               StreetSegmentRef(startInfo, &startStreetSegment), discoveredNodes, nodeRanks);
         bool endCoordOnEndStreetSegment = isGeoCoordOnSegment(endCoord, endStreetSegment);
 
         while (!nodeRanks.empty()) {
@@ -231,6 +226,7 @@ public:
                                        StreetNameRef(currentIt->street, &currentIt->street->streetName),
                                        discoveredNodes, directions);
 
+            // Either insert or update the map and priority queue.
             auto insertOrUpdate = [&](GeoCoordRef const& neighborCoord, double distance, double estimate,
                                       StreetSegmentRef const& street) {
                 if (auto it = discoveredNodes.find(neighborCoord)) {
@@ -245,20 +241,22 @@ public:
             };
 
             if (!endCoordOnEndStreetSegment && isGeoCoordOnSegment(currentCoord, endStreetSegment)) {
-                // Found it. For this, we need to consider an additional node, the end attraction itself.
+                // Found the segment where the attraction is. For this, we need to consider an additional neighbor, the
+                // end attraction itself.
                 double distance = currentIt->distance + distanceEarthKM(currentCoord, endCoord);
                 GeoCoordRef theEnd(GeoCoordRefRaw(endInfo, &endCoord));
                 insertOrUpdate(theEnd, distance, distance, StreetSegmentRef(endInfo, &endStreetSegment));
             }
 
+            // Find neighbors and conditionally update.
             auto neighbors = getNeighbors(currentCoord);
             for (auto const& neighbor : *neighbors) {
                 double distance =
                   currentIt->distance +
                   (currentCoord == neighbor.first ? 0.0 : distanceEarthKM(currentCoord, neighbor.first));
                 double estimate = distance + distanceEarthKM(neighbor.first, endCoord);
-                GeoCoordRef neighborCoord(GeoCoordRefRaw(neighbors, &neighbor.first));
-                insertOrUpdate(neighborCoord, distance, estimate, StreetSegmentRef(neighbors, &neighbor.second));
+                insertOrUpdate(GeoCoordRefRaw(neighbors, &neighbor.first), distance, estimate,
+                               StreetSegmentRef(neighbors, &neighbor.second));
             }
         }
         return NAV_NO_ROUTE;
