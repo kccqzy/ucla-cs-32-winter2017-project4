@@ -340,7 +340,6 @@ int main() {
                                             "Swim Gym",
                                             "Cheviot Hills Recreation Center",
                                             "12 Nimrod Place",
-                                            "12 Nimrod Place",
                                             "Elite body sculpture",
                                             "NuLegal",
                                             "OneShotMove Moving Company",

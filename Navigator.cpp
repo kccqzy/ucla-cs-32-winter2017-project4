@@ -45,7 +45,7 @@ private:
         return rvp;
     }
 
-    // StreetNameRef and GeoCoordRef are basically shared (ref-counted) pointers.
+    // StreetNameRef, StreetSegment, and GeoCoordRef are basically shared (ref-counted) pointers.
     typedef std::shared_ptr<StreetName const> StreetNameRef;
     typedef std::shared_ptr<StreetSegment const> StreetSegmentRef;
     typedef std::shared_ptr<GeoCoord const> GeoCoordRefRaw;
@@ -57,19 +57,16 @@ private:
     };
 
     struct DiscoveredNode {
-        GeoCoordRef parent;
-        StreetSegmentRef street;
-        // This street refers to the street used to reach the current node. Street is a property of the segment;
-        // therefore it is meaningless if the node is the start/end attraction and it has the same coordinate as the
-        // beginning/end of multiple street segments.
-        double distance;
-        double estimate;
+        GeoCoordRef parent;      // Where did we come from?
+        StreetSegmentRef street; // This street refers to the street used to reach the current node.
+        double distance;         // Traveled distance from start to here
+        double estimate;         // Traveled distance from start to here + shortest distance from here to end
         DiscoveredNode(GeoCoordRef const& parent, double distance, double estimate, StreetSegmentRef const& street)
           : parent(parent), street(street), distance(distance), estimate(estimate) {}
     };
     typedef MyMap<GeoCoordRef, DiscoveredNode> NodeMap;
     struct RankedNode {
-        double rank;
+        double rank; // Traveled distance from start to here + shortest distance from here to end
         DiscoveredNode* it;
         GeoCoordRef coord;
         RankedNode(double rank, DiscoveredNode* it, GeoCoordRef const& coord) : rank(rank), it(it), coord(coord) {}
@@ -109,7 +106,8 @@ private:
                                      StreetNameRef previousStreetName, NodeMap const& discoveredNodes,
                                      std::vector<NavSegment>& directions) {
         directions.clear();
-        for (GeoCoordRef previous = GeoCoordRefRaw(endInfo, &endInfo->first);;) {
+        GeoCoordRef previous = GeoCoordRefRaw(endInfo, &endInfo->first);
+        while (!(here == startInfo->first)) {
             auto i = discoveredNodes.find(here);
             assert(i);
             StreetNameRef thisStreetName = StreetNameRef(i->street, &i->street->streetName);
@@ -122,12 +120,8 @@ private:
             here = i->parent;
             if (directions.back().m_command == NavSegment::TURN)
                 directions.back().m_direction = describeTurn(here, previous, previous2);
-            if (here == startInfo->first) {
-                if (!(here == previous))
-                    directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
-                break;
-            }
         }
+        if (!(here == previous)) directions.emplace_back(makeProceedSegment(here, previous, *previousStreetName));
 
         if (directions.back().m_command == NavSegment::TURN) directions.pop_back();
         std::reverse(directions.begin(), directions.end());
