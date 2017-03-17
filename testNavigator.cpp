@@ -38,6 +38,7 @@ void testNav(Navigator const& nav, std::string const& begin, std::string const& 
         assert(nrr == NAV_NO_ROUTE);
         assert(directions.empty());
     } else {
+        if (begin == end) return;
         assert(!directions.empty());
         printf("***** Shortest route from %s to %s has %zu steps:\n", begin.c_str(), end.c_str(), directions.size());
         double d1 = print_directions(directions);
@@ -486,8 +487,6 @@ int main() {
                                             "11 Santa Monica Canyon",
                                             "2 Santa Monica Canyon",
                                             "12 Santa Monica Canyon",
-                                            "13 Santa Monica Canyon",
-                                            "11 Santa Monica Canyon",
                                             "13 Santa Monica Canyon",
                                             "Dowlen Drive",
                                             "Starving Students Movers",
