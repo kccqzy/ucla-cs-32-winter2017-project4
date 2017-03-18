@@ -26,12 +26,12 @@ private:
     Arena nodes;
     Node* root;
 
-    bool isRed(Node* p) const {
+    static bool isRed(Node* p) {
         if (!p) return false; // Null links are black
         return p->color == Color::Red;
     }
 
-    Node* rotateLeft(Node* h) {
+    static Node* rotateLeft(Node* h) {
         Node* x = h->right;
         h->right = x->left;
         x->left = h;
@@ -40,7 +40,7 @@ private:
         return x;
     }
 
-    Node* rotateRight(Node* h) {
+    static Node* rotateRight(Node* h) {
         Node* x = h->left;
         h->left = x->right;
         x->right = h;
@@ -49,13 +49,13 @@ private:
         return x;
     }
 
-    void moveRedUp(Node* h) {
+    static void moveRedUp(Node* h) {
         h->color = Color::Red;
         h->left->color = Color::Black;
         h->right->color = Color::Black;
     }
 
-    Node* findNode(Node* p, K const& k) const {
+    static Node* findNode(Node* p, K const& k) {
         if (!p) return p;
         if (p->key < k) return findNode(p->right, k);
         if (k < p->key) return findNode(p->left, k);
